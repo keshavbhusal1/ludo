@@ -298,7 +298,10 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                 ),
                 tooltip: 'Haptics',
                 onPressed: () {
-                  setState(() => HapticsService.setEnabled(!HapticsService.isEnabled));
+                  // Flips the flag at once; saving it finishes in the background.
+                  // (setState's callback must not return that Future.)
+                  HapticsService.setEnabled(!HapticsService.isEnabled);
+                  setState(() {});
                   _showSnackbar(
                     HapticsService.isEnabled ? 'Haptics On' : 'Haptics Off',
                     icon: Icons.vibration,

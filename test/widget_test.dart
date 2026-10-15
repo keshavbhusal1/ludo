@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ludo/bootstrap.dart';
+import 'package:ludo/core/services/haptics_service.dart';
 import 'package:ludo/app/app.dart';
 import 'package:ludo/features/ludo/data/datasources/ludo_local_data_source.dart';
 import 'package:ludo/models/player_color.dart';
@@ -98,5 +99,33 @@ void main() {
 
     expect(find.byType(MoveHistorySheet), findsOneWidget);
     expect(find.text('No moves yet'), findsOneWidget);
+  });
+
+  testWidgets('the haptics button toggles, updates, and remembers the choice', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(() => HapticsService.isEnabled = true);
+
+    await tester.pumpWidget(const LudoApp());
+    await tester.pump();
+    expect(HapticsService.isEnabled, isTrue);
+
+    await tester.tap(find.byTooltip('Haptics'));
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'setState must not get a Future');
+    expect(HapticsService.isEnabled, isFalse);
+    expect(find.byIcon(Icons.phone_android), findsOneWidget, reason: 'icon shows off');
+    expect(find.text('Haptics Off'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(HapticsService.enabledKey), isFalse, reason: 'saved');
+
+    await tester.tap(find.byTooltip('Haptics'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(HapticsService.isEnabled, isTrue);
+    expect(find.byIcon(Icons.vibration), findsWidgets);
+    expect(prefs.getBool(HapticsService.enabledKey), isTrue);
   });
 }
