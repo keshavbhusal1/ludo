@@ -179,13 +179,13 @@ class _LudoGameScreenState extends State<LudoGameScreen>
     if (state.isShowingRollOverlay) {
       final roller = state.rollerPlayer ?? active;
       return '${roller.name} is rolling the dice...';
-    } else if (game.turnPhase == TurnPhase.awaitingRoll) {
+    } else if (game.fsmState == LudoFsmState.waitingForRoll) {
       if (active.isBotControlled) {
         return '${active.name} is rolling the dice...';
       } else {
         return "${active.name}'s turn — Tap the dice to roll";
       }
-    } else if (game.turnPhase == TurnPhase.awaitingPawnSelection) {
+    } else if (game.fsmState == LudoFsmState.waitingForSelection) {
       if (active.isBotControlled) {
         return '${active.name} is moving token...';
       } else {
@@ -231,7 +231,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
         final activePlayer = gameState.activePlayer;
         final primaryColor = Color(activePlayer.color.primaryColorValue);
         final isHumanTurn = !activePlayer.isBotControlled;
-        final isAwaitingRoll = gameState.turnPhase == TurnPhase.awaitingRoll;
+        final isAwaitingRoll = gameState.fsmState == LudoFsmState.waitingForRoll;
         final requiredTokens = gameState.rules.winCondition.tokensRequired;
 
         Player? getPlayer(PlayerColor color) => gameState.getPlayer(color);
@@ -457,7 +457,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                               onDisabledTap: () {
                                 if (state.isShowingRollOverlay) return;
                                 if (isHumanTurn &&
-                                    gameState.turnPhase == TurnPhase.awaitingPawnSelection) {
+                                    gameState.fsmState == LudoFsmState.waitingForSelection) {
                                   _showSnackbar(
                                     'Please tap a highlighted token on the board to move',
                                     icon: Icons.touch_app,
@@ -551,7 +551,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                 ),
                               )
                             else if (isHumanTurn &&
-                                gameState.turnPhase == TurnPhase.awaitingPawnSelection)
+                                gameState.fsmState == LudoFsmState.waitingForSelection)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 decoration: BoxDecoration(

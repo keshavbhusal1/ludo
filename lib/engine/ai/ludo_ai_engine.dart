@@ -4,7 +4,7 @@ import '../../core/coordinates/board_path_registry.dart';
 import '../../models/game_rules.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
-import '../../models/pawn_position.dart';
+import '../../models/board_position.dart';
 
 /// Heuristic evaluation and autonomous decision service for offline AI bots.
 /// Supports 3 difficulty tiers: Easy, Medium, and Grandmaster (Hard).
@@ -77,8 +77,8 @@ class LudoAiEngine {
       case AiDifficulty.medium:
         // Standard balanced heuristics
         if (move.isCapture) score += 100.0;
-        if (move.toPosition is PawnPositionOnTrack) {
-          final dest = (move.toPosition as PawnPositionOnTrack).trackIndex;
+        if (move.toPosition is BoardPositionTrack) {
+          final dest = (move.toPosition as BoardPositionTrack).trackIndex;
           if (BoardPathRegistry.isSafeTrackIndex(dest)) score += 60.0;
         }
         if (move.isReachingHome) score += 50.0;
@@ -93,8 +93,8 @@ class LudoAiEngine {
       case AiDifficulty.hard:
         // Grandmaster tactical heuristics
         if (move.isCapture) score += 160.0;
-        if (move.toPosition is PawnPositionOnTrack) {
-          final dest = (move.toPosition as PawnPositionOnTrack).trackIndex;
+        if (move.toPosition is BoardPositionTrack) {
+          final dest = (move.toPosition as BoardPositionTrack).trackIndex;
           if (BoardPathRegistry.isSafeTrackIndex(dest)) {
             score += 90.0; // Camping on safe squares is highly valued
           } else {
@@ -122,8 +122,8 @@ class LudoAiEngine {
   }
 
   bool _isEscapingThreat(GameState state, Move move) {
-    if (move.fromPosition is PawnPositionOnTrack) {
-      final fromTrackIndex = (move.fromPosition as PawnPositionOnTrack).trackIndex;
+    if (move.fromPosition is BoardPositionTrack) {
+      final fromTrackIndex = (move.fromPosition as BoardPositionTrack).trackIndex;
       if (!BoardPathRegistry.isSafeTrackIndex(fromTrackIndex)) {
         return _isTileThreatenedByOpponent(
           state: state,
@@ -142,9 +142,9 @@ class LudoAiEngine {
   }) {
     for (final player in state.players) {
       if (player.color == myColor) continue;
-      for (final pawn in player.pawns) {
+      for (final pawn in player.tokens) {
         if (pawn.isOnTrack) {
-          final oppTrack = (pawn.position as PawnPositionOnTrack).trackIndex;
+          final oppTrack = (pawn.position as BoardPositionTrack).trackIndex;
           final distanceBehind =
               (trackIndex - oppTrack + BoardPathRegistry.totalCommonTiles) %
                   BoardPathRegistry.totalCommonTiles;

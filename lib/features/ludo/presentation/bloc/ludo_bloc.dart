@@ -95,8 +95,8 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
         !game.activePlayer.isBotControlled &&
         s.pendingRoll == null &&
         s.animatingMove == null &&
-        (game.turnPhase == TurnPhase.awaitingRoll ||
-            game.turnPhase == TurnPhase.awaitingPawnSelection);
+        (game.fsmState == LudoFsmState.waitingForRoll ||
+            game.fsmState == LudoFsmState.waitingForSelection);
   }
 
   /// Starts, keeps, or stops the turn timer to match the current state, and
@@ -183,7 +183,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     final maxStrikes = game.config.timerConfig.maxStrikes;
     var history = s.history;
 
-    if (game.turnPhase == TurnPhase.awaitingRoll) {
+    if (game.fsmState == LudoFsmState.waitingForRoll) {
       final rolled = rollDiceUseCase(game).getOrElse((failure) {
         debugPrint('Auto-roll failed: $failure');
         return game;
@@ -207,7 +207,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       ),
     ));
 
-    if (game.turnPhase == TurnPhase.awaitingPawnSelection &&
+    if (game.fsmState == LudoFsmState.waitingForSelection &&
         game.activePlayerColor == player.color) {
       final best = aiEngine.selectBestMove(state: game, validMoves: game.validMoves);
       _onLudoMoveSelected(LudoMoveSelected(best), emit);
@@ -306,7 +306,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     final currentState = state as LudoActiveState;
     final gameState = currentState.gameState;
 
-    if (gameState.turnPhase != TurnPhase.awaitingRoll ||
+    if (gameState.fsmState != LudoFsmState.waitingForRoll ||
         currentState.isShowingRollOverlay ||
         gameState.isGameOver) {
       return;
@@ -336,7 +336,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
           _autosave();
           // Let the rolled value show; linger longer when the turn is passing on.
           final settleMs =
-              newState.turnPhase == TurnPhase.awaitingPawnSelection ? 380 : 700;
+              newState.fsmState == LudoFsmState.waitingForSelection ? 380 : 700;
           _scheduleBotStep(_scaled(settleMs), const LudoAiTurnTriggered());
         }
       },
@@ -395,7 +395,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     ));
     await _autosave();
 
-    if (gameState.turnPhase == TurnPhase.awaitingPawnSelection) {
+    if (gameState.fsmState == LudoFsmState.waitingForSelection) {
       if (gameState.validMoves.length == 1 && !gameState.activePlayer.isBotControlled) {
         // Human player with single forced move: auto-move gently
         _schedule(_scaled(220), LudoMoveSelected(gameState.validMoves.first));
@@ -572,7 +572,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
 
   static bool _hitSixesLimit(GameState before, int roll) {
     final limit = before.config.consecutiveSixesLimit;
-    return limit > 0 && roll == 6 && before.consecutiveSixes + 1 >= limit;
+    return limit > 0 && roll == 6 && before.consecutiveSixesCount + 1 >= limit;
   }
 
   /// "Two", "Three", ... for small counts in messages; digits otherwise.
@@ -587,7 +587,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     GameState after,
   ) {
     final roll = after.lastDiceRoll;
-    if (roll == null || after.turnPhase == TurnPhase.awaitingPawnSelection) return history;
+    if (roll == null || after.fsmState == LudoFsmState.waitingForSelection) return history;
     final player = before.activePlayer;
     return [
       ...history,
@@ -604,7 +604,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     final mover = before.activePlayer;
     final victim = move.isCapture
         ? before.players
-            .where((p) => p.tokens.any((t) => t.id == move.capturedPawnId))
+            .where((p) => p.tokens.any((t) => t.id == move.capturedTokenId))
             .firstOrNull
         : null;
     return HistoryEntry(
@@ -649,12 +649,12 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     if (gameState.isGameOver || !gameState.activePlayer.isBotControlled) return;
     final speed = gameState.rules.gameSpeed;
 
-    if (gameState.turnPhase == TurnPhase.awaitingRoll) {
+    if (gameState.fsmState == LudoFsmState.waitingForRoll) {
       _scheduleBotStep(
         aiEngine.thinkingDelay(minMs: 600, maxMs: 900, gameSpeed: speed),
         const LudoDiceRollRequested(),
       );
-    } else if (gameState.turnPhase == TurnPhase.awaitingPawnSelection &&
+    } else if (gameState.fsmState == LudoFsmState.waitingForSelection &&
         gameState.validMoves.isNotEmpty) {
       final bestMove = aiEngine.selectBestMove(
         state: gameState,

@@ -328,7 +328,7 @@ void main() {
       expect(rolls.calls, 1);
       expect(s.gameState.players[0].strikes, 1);
       expect(s.gameState.players[0].isBotControlled, isFalse);
-      expect(s.animatingMove?.pawnId, 'red_0', reason: 'the roll was not wasted');
+      expect(s.animatingMove?.tokenId, 'red_0', reason: 'the roll was not wasted');
       expect(s.turnDeadline, isNull);
       expect(snackbars, contains(contains('ran out of time (strike 1/3)')));
       await bloc.close();
@@ -462,7 +462,7 @@ void main() {
       bloc.add(const LudoUndoRequested());
       await wait(20);
       final s = stateOf(bloc);
-      expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection, reason: "back at red's choice");
+      expect(s.gameState.fsmState, LudoFsmState.waitingForSelection, reason: "back at red's choice");
       expect(s.gameState.players[1].strikes, 1, reason: "green's strike stands");
       expect(identical(s.undoStack.last.state, s.gameState), isTrue);
       expect(s.canUndo, isFalse, reason: 'already at the only choice point');
@@ -486,7 +486,7 @@ void main() {
       expect(rolls.calls, 0, reason: "the bot's pending roll was cancelled");
       expect(red.isBotControlled, isFalse);
       expect(red.strikes, 0);
-      expect(stateOf(bloc).gameState.turnPhase, TurnPhase.awaitingRoll);
+      expect(stateOf(bloc).gameState.fsmState, LudoFsmState.waitingForRoll);
       expect(snackbars, contains('Red is back in control'));
       expect(store.saved?.game.players[0].isBotControlled, isFalse, reason: 'autosaved');
       await bloc.close();
@@ -504,7 +504,7 @@ void main() {
 
       final s = stateOf(bloc);
       expect(s.animatingMove, isNull, reason: 'the bot did not move');
-      expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(s.gameState.fsmState, LudoFsmState.waitingForSelection);
       expect(s.gameState.lastDiceRoll, 3);
       expect(s.gameState.validMoves, hasLength(2));
       await bloc.close();
@@ -583,9 +583,9 @@ void main() {
       await settle();
     }
 
-    /// Selects [pawnId]'s move and finishes its animation, as the screen would.
-    Future<void> play(LudoBloc bloc, String pawnId) async {
-      final move = stateOf(bloc).gameState.validMoves.firstWhere((m) => m.pawnId == pawnId);
+    /// Selects [tokenId]'s move and finishes its animation, as the screen would.
+    Future<void> play(LudoBloc bloc, String tokenId) async {
+      final move = stateOf(bloc).gameState.validMoves.firstWhere((m) => m.tokenId == tokenId);
       bloc.add(LudoMoveSelected(move));
       await settle();
       bloc.add(LudoMoveAnimationCompleted(move));
@@ -609,7 +609,7 @@ void main() {
       await settle();
       final undone = stateOf(bloc);
       expect(undone.gameState.activePlayerColor, PlayerColor.red);
-      expect(undone.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(undone.gameState.fsmState, LudoFsmState.waitingForSelection);
       expect(undone.gameState.lastDiceRoll, 3, reason: 'same dice, no re-roll');
       expect(undone.gameState.players[0].tokens[0].relativeStep, 0);
       expect(undone.history, isEmpty);
@@ -619,7 +619,7 @@ void main() {
       final after = stateOf(bloc);
       expect(after.gameState.players[0].tokens[0].relativeStep, 0);
       expect(after.gameState.players[0].tokens[1].relativeStep, 13);
-      expect(after.history.single.move?.pawnId, 'red_1');
+      expect(after.history.single.move?.tokenId, 'red_1');
       expect(after.canUndo, isTrue, reason: 'can come back to the same choice again');
       await bloc.close();
     });
@@ -673,7 +673,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       expect(rolls.calls, 1, reason: 'the bot must not roll after undo');
       expect(stateOf(bloc).gameState.activePlayerColor, PlayerColor.red);
-      expect(stateOf(bloc).gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(stateOf(bloc).gameState.fsmState, LudoFsmState.waitingForSelection);
       await bloc.close();
     });
 
@@ -727,7 +727,7 @@ void main() {
       second.add(const LudoUndoRequested());
       await settle();
       final undone = stateOf(second);
-      expect(undone.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(undone.gameState.fsmState, LudoFsmState.waitingForSelection);
       expect(undone.gameState.lastDiceRoll, 3);
       expect(undone.gameState.players[0].tokens[0].relativeStep, 0);
       expect(undone.history, isEmpty);
@@ -750,7 +750,7 @@ void main() {
       await settle();
 
       final resumed = stateOf(second);
-      expect(resumed.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(resumed.gameState.fsmState, LudoFsmState.waitingForSelection);
       expect(resumed.gameState.validMoves, hasLength(2));
       expect(resumed.undoStack, hasLength(1));
       expect(resumed.canUndo, isFalse);
@@ -837,10 +837,10 @@ void main() {
       final sa = (a.state as LudoActiveState).gameState;
       final sb = (b.state as LudoActiveState).gameState;
       expect(sa.lastDiceRoll, 6);
-      expect(sa.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(sa.fsmState, LudoFsmState.waitingForSelection);
       expect(sb.players.map((p) => p.color), [PlayerColor.yellow, PlayerColor.blue]);
       expect(sb.lastDiceRoll, isNull);
-      expect(sb.turnPhase, TurnPhase.awaitingRoll);
+      expect(sb.fsmState, LudoFsmState.waitingForRoll);
       await a.close();
       await b.close();
     });
@@ -993,7 +993,7 @@ void main() {
       verify: (bloc) {
         final s = bloc.state as LudoActiveState;
         expect(s.gameState.players[0].tokens[0].relativeStep, 0);
-        expect(s.pendingRoll?.turnPhase, TurnPhase.awaitingPawnSelection);
+        expect(s.pendingRoll?.fsmState, LudoFsmState.waitingForSelection);
       },
     );
 
@@ -1002,7 +1002,7 @@ void main() {
         colors: const [PlayerColor.red, PlayerColor.green],
       ));
       final rolled = engine.rollDice(game, 3);
-      expect(rolled.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(rolled.fsmState, LudoFsmState.waitingForSelection);
       expect(rolled.validMoves, hasLength(1));
       expect(rolled.players[0].tokens[0].relativeStep, 0);
     });
@@ -1021,7 +1021,7 @@ void main() {
             .having((s) => s.isShowingRollOverlay, 'overlay', true)
             .having((s) => s.gameState.lastDiceRoll, 'roll not revealed yet', isNull),
         isA<LudoActiveState>()
-            .having((s) => s.gameState.turnPhase, 'phase', TurnPhase.awaitingPawnSelection)
+            .having((s) => s.gameState.fsmState, 'phase', LudoFsmState.waitingForSelection)
             .having((s) => s.gameState.validMoves.length, 'moves', 1)
             .having((s) => s.gameState.players[0].tokens[0].relativeStep, 'not moved yet', 0),
         isA<LudoActiveState>()
@@ -1036,7 +1036,7 @@ void main() {
       wait: const Duration(milliseconds: 1500),
       verify: (bloc) {
         final s = bloc.state as LudoActiveState;
-        expect(s.animatingMove?.pawnId, 'red_0');
+        expect(s.animatingMove?.tokenId, 'red_0');
         expect(s.animatingMove?.toRelativeStep, 3);
         // Engine hasn't applied it yet: the pawn moves only after the animation completes
         expect(s.gameState.players[0].tokens[0].relativeStep, 0);
@@ -1105,7 +1105,7 @@ void main() {
         final s = bloc.state as LudoActiveState;
         expect(s.sideEffect, isNot(isA<LudoSnackbarEffect>()));
         expect(s.gameState.activePlayerColor, PlayerColor.red);
-        expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+        expect(s.gameState.fsmState, LudoFsmState.waitingForSelection);
         expect(s.history, isEmpty, reason: 'no penalty entry');
       },
     );

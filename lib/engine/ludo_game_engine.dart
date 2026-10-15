@@ -120,7 +120,7 @@ class LudoEngine {
               BoardPathRegistry.commonTrack[player.color.startTrackIndex];
 
           moves.add(Move(
-            pawnId: token.id,
+            tokenId: token.id,
             playerColor: player.color,
             diceRoll: diceRoll,
             fromPosition: token.position,
@@ -158,7 +158,7 @@ class LudoEngine {
       late final BoardPosition targetPosition;
       bool isReachingHome = false;
       bool isCapture = false;
-      String? capturedPawnId;
+      String? capturedTokenId;
 
       if (targetStep <= 50) {
         // Still on common track
@@ -180,7 +180,7 @@ class LudoEngine {
                 final pos = opponentToken.position as BoardPositionTrack;
                 if (pos.trackIndex == targetTrackIndex) {
                   isCapture = true;
-                  capturedPawnId = opponentToken.id;
+                  capturedTokenId = opponentToken.id;
                   break;
                 }
               }
@@ -209,7 +209,7 @@ class LudoEngine {
       final grantsExtraTurn = diceRoll == 6 || isCapture || isReachingHome;
 
       moves.add(Move(
-        pawnId: token.id,
+        tokenId: token.id,
         playerColor: player.color,
         diceRoll: diceRoll,
         fromPosition: token.position,
@@ -217,7 +217,7 @@ class LudoEngine {
         fromRelativeStep: currentStep,
         toRelativeStep: targetStep,
         isCapture: isCapture,
-        capturedPawnId: capturedPawnId,
+        capturedTokenId: capturedTokenId,
         isReachingHome: isReachingHome,
         grantsExtraTurn: grantsExtraTurn,
         trajectory: trajectory,
@@ -233,17 +233,14 @@ class LudoEngine {
   /// Returns [state] unchanged if it isn't awaiting a selection or [move] isn't
   /// one of its legal moves.
   GameState executeMove(GameState state, Move move) {
-    if (state.fsmState != LudoFsmState.waitingForSelection &&
-        state.fsmState != LudoFsmState.movingToken) {
-      return state;
-    }
+    if (state.fsmState != LudoFsmState.waitingForSelection) return state;
     if (!state.validMoves.contains(move)) return state;
 
     final activePlayer = state.activePlayer;
 
     // 1. Update the moving token
     final updatedTokens = activePlayer.tokens.map((t) {
-      if (t.id == move.pawnId) {
+      if (t.id == move.tokenId) {
         return t.copyWith(position: move.toPosition);
       }
       return t;
@@ -260,7 +257,7 @@ class LudoEngine {
       } else {
         // If an opponent token was captured, reset it to base
         final opponentTokens = player.tokens.map((oppToken) {
-          if (move.isCapture && oppToken.id == move.capturedPawnId) {
+          if (move.isCapture && oppToken.id == move.capturedTokenId) {
             return oppToken.copyWith(
               position: BoardPosition.base(oppToken.index),
             );
@@ -300,7 +297,6 @@ class LudoEngine {
         fsmState: LudoFsmState.gameOver,
         validMoves: const [],
         clearDiceRoll: true,
-        clearAnimatingMove: true,
       );
     }
 
@@ -318,7 +314,6 @@ class LudoEngine {
           getsExtraTurn && move.diceRoll == 6 ? state.consecutiveSixesCount : 0,
       validMoves: const [],
       clearDiceRoll: true,
-      clearAnimatingMove: true,
     );
   }
 

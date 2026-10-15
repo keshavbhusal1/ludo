@@ -46,10 +46,6 @@ class Token {
   bool get isInHomeColumn => position.isInHomeColumn;
   bool get isGoal => position.isGoal;
 
-  // Compatibility aliases
-  bool get isInYard => isInBase;
-  bool get isInHomeRun => isInHomeColumn;
-  bool get isFinished => isGoal;
 
   int get relativeStep => position.relativeStep;
 

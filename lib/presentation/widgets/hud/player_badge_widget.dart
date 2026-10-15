@@ -28,7 +28,7 @@ class PlayerBadgeWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = player.color;
     final primaryColor = Color(color.primaryColorValue);
-    final hasWon = player.finishedPawnCount >= tokensRequired;
+    final hasWon = player.finishedTokenCount >= tokensRequired;
     final isTakenOver = player.isBotControlled && !player.isAi;
     final canReclaim = isTakenOver && onReclaim != null;
 
@@ -37,7 +37,7 @@ class PlayerBadgeWidget extends StatelessWidget {
         : (player.isAi ? '${player.name}, bot' : player.name);
     final progress = hasWon
         ? 'won'
-        : '${player.finishedPawnCount} of $tokensRequired tokens home';
+        : '${player.finishedTokenCount} of $tokensRequired tokens home';
 
     return Semantics(
       label: '$seat, $progress',
@@ -170,7 +170,7 @@ class PlayerBadgeWidget extends StatelessWidget {
                 child: Text(
                   hasWon
                       ? '🏆 Won'
-                      : '${player.finishedPawnCount}/$tokensRequired',
+                      : '${player.finishedTokenCount}/$tokensRequired',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,

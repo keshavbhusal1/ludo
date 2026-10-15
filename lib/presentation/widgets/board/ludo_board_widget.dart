@@ -4,7 +4,7 @@ import '../../../core/coordinates/board_coordinate.dart';
 import '../../../core/coordinates/board_path_registry.dart';
 import '../../../models/game_state.dart';
 import '../../../models/move.dart';
-import '../../../models/pawn.dart';
+import '../../../models/token.dart';
 import '../../themes/board_theme.dart';
 import 'ludo_board_painter.dart';
 import 'ludo_pawn_widget.dart';
@@ -64,10 +64,10 @@ class LudoBoardWidget extends StatelessWidget {
                   ),
 
                   // 2. Trajectory Path Trails & Target Landing Badges
-                  if (gameState.turnPhase == TurnPhase.awaitingPawnSelection)
+                  if (gameState.fsmState == LudoFsmState.waitingForSelection)
                     ..._buildPathPreviews(cellSize),
 
-                  // 3. Interactive / Animated Pawn Layer
+                  // 3. Interactive / Animated Token Layer
                   ..._buildPawnLayers(cellSize),
                 ],
               ),
@@ -156,24 +156,24 @@ class LudoBoardWidget extends StatelessWidget {
     final widgets = <Widget>[];
 
     final movableMoveMap = <String, Move>{};
-    if (gameState.turnPhase == TurnPhase.awaitingPawnSelection) {
+    if (gameState.fsmState == LudoFsmState.waitingForSelection) {
       for (final move in gameState.validMoves) {
-        movableMoveMap[move.pawnId] = move;
+        movableMoveMap[move.tokenId] = move;
       }
     }
 
-    final allPawns = <Pawn>[];
+    final allPawns = <Token>[];
     for (final player in gameState.players) {
-      for (final pawn in player.pawns) {
+      for (final pawn in player.tokens) {
         allPawns.add(pawn);
       }
     }
 
-    Pawn? activePawn;
-    final staticPawns = <Pawn>[];
+    Token? activePawn;
+    final staticPawns = <Token>[];
 
     for (final pawn in allPawns) {
-      if (animatingMove != null && pawn.id == animatingMove!.pawnId) {
+      if (animatingMove != null && pawn.id == animatingMove!.tokenId) {
         activePawn = pawn;
       } else {
         staticPawns.add(pawn);
@@ -181,7 +181,7 @@ class LudoBoardWidget extends StatelessWidget {
     }
 
     // Group static pawns by their discrete coordinate to compute cluster offsets
-    final coordinateClusters = <BoardCoordinate, List<Pawn>>{};
+    final coordinateClusters = <BoardCoordinate, List<Token>>{};
     for (final pawn in staticPawns) {
       final coord = _getPawnCoordinate(pawn);
       coordinateClusters.putIfAbsent(coord, () => []).add(pawn);
@@ -230,7 +230,7 @@ class LudoBoardWidget extends StatelessWidget {
       }
     }
 
-    // Render Animating Pawn with Parabolic Hops
+    // Render Animating Token with Parabolic Hops
     if (activePawn != null && animatingMove != null) {
       final trajectory = animatingMove!.trajectory;
       final pawnRenderSize = cellSize * 0.82;
@@ -287,8 +287,8 @@ class LudoBoardWidget extends StatelessWidget {
     return widgets;
   }
 
-  BoardCoordinate _getPawnCoordinate(Pawn pawn) {
-    if (pawn.isInYard) {
+  BoardCoordinate _getPawnCoordinate(Token pawn) {
+    if (pawn.isInBase) {
       return BoardPathRegistry.yardSlots[pawn.color]![pawn.index];
     } else {
       return BoardPathRegistry.getCoordinateForStep(pawn.color, pawn.relativeStep);

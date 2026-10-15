@@ -5,7 +5,7 @@ import 'package:ludo/bootstrap.dart';
 import 'package:ludo/app/app.dart';
 import 'package:ludo/features/ludo/data/datasources/ludo_local_data_source.dart';
 import 'package:ludo/models/player_color.dart';
-import 'package:ludo/presentation/screens/ludo_game_screen.dart';
+import 'package:ludo/features/ludo/presentation/screens/ludo_game_screen.dart';
 import 'package:ludo/presentation/widgets/board/ludo_board_widget.dart';
 import 'package:ludo/presentation/widgets/dice/animated_dice_widget.dart';
 import 'package:ludo/presentation/widgets/dice/full_screen_dice_roll_overlay.dart';

@@ -28,10 +28,18 @@ void main() {
     });
 
     test('4 Player home entrance indices match: Red=51, Green=12, Yellow=25, Blue=38', () {
-      expect(PlayerColor.red.homeEntranceTrackIndex, equals(51));
-      expect(PlayerColor.green.homeEntranceTrackIndex, equals(12));
-      expect(PlayerColor.yellow.homeEntranceTrackIndex, equals(25));
-      expect(PlayerColor.blue.homeEntranceTrackIndex, equals(38));
+      // A token's last track square (step 50) is its color's entrance tile
+      const entrances = {
+        PlayerColor.red: 51,
+        PlayerColor.green: 12,
+        PlayerColor.yellow: 25,
+        PlayerColor.blue: 38,
+      };
+      for (final MapEntry(key: color, value: index) in entrances.entries) {
+        expect(BoardPathRegistry.getCoordinateForStep(color, 50),
+            equals(BoardPathRegistry.commonTrack[index]),
+            reason: '${color.name} enters home from track index $index');
+      }
 
       expect(BoardPathRegistry.commonTrack[51], equals(const BoardCoordinate(0, 7)));
       expect(BoardPathRegistry.commonTrack[12], equals(const BoardCoordinate(7, 0)));
@@ -41,7 +49,7 @@ void main() {
 
     test('8 Global safe squares match exactly: [1, 9, 14, 22, 27, 35, 40, 48]', () {
       const expectedSafeSquares = [1, 9, 14, 22, 27, 35, 40, 48];
-      expect(BoardPathRegistry.safeTrackSquares, equals(expectedSafeSquares));
+      expect(BoardPathRegistry.safeTrackIndices, equals(expectedSafeSquares.toSet()));
       expect(BoardPathRegistry.safeTrackIndices.length, equals(8));
 
       for (final index in expectedSafeSquares) {
@@ -160,7 +168,7 @@ void main() {
 
       // Red rolls 1 -> moves from index 8 to 9 (Star 1 Safe Square!)
       final rollState = controller.rollDice(1);
-      final move = rollState.validMoves.firstWhere((m) => m.pawnId == 'red_0');
+      final move = rollState.validMoves.firstWhere((m) => m.tokenId == 'red_0');
 
       // Verify NO capture occurs on safe tile
       expect(move.isCapture, isFalse);
@@ -207,7 +215,7 @@ void main() {
 
       // Red rolls 4: 1 + 4 = 5 (landing square is non-safe index 5 with Green token)
       final rollState = controller.rollDice(4);
-      final captureMove = rollState.validMoves.firstWhere((m) => m.pawnId == 'red_0');
+      final captureMove = rollState.validMoves.firstWhere((m) => m.tokenId == 'red_0');
 
       expect(captureMove.isCapture, isTrue);
       expect(captureMove.capturedTokenId, equals('green_0'));
@@ -665,7 +673,7 @@ void main() {
       final state = controller.state;
 
       const normalMove = Move(
-        pawnId: 'red_0',
+        tokenId: 'red_0',
         playerColor: PlayerColor.red,
         diceRoll: 3,
         fromPosition: BoardPosition.track(trackIndex: 1, relativeStep: 0),
@@ -675,7 +683,7 @@ void main() {
       );
 
       const captureMove = Move(
-        pawnId: 'red_1',
+        tokenId: 'red_1',
         playerColor: PlayerColor.red,
         diceRoll: 3,
         fromPosition: BoardPosition.track(trackIndex: 2, relativeStep: 1),
@@ -683,7 +691,7 @@ void main() {
         fromRelativeStep: 1,
         toRelativeStep: 4,
         isCapture: true,
-        capturedPawnId: 'green_0',
+        capturedTokenId: 'green_0',
       );
 
       final bestMove = aiEngine.selectBestMove(

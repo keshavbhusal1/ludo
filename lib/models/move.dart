@@ -4,8 +4,8 @@ import 'player_color.dart';
 
 /// Represents a validated, executable token movement in the game.
 class Move {
-  /// ID of the token/pawn executing this move.
-  final String pawnId;
+  /// ID of the token executing this move.
+  final String tokenId;
 
   /// Player color controlling the token.
   final PlayerColor playerColor;
@@ -29,7 +29,7 @@ class Move {
   final bool isCapture;
 
   /// ID of the opponent token captured, if any.
-  final String? capturedPawnId;
+  final String? capturedTokenId;
 
   /// Whether this move results in the token entering the final home center.
   final bool isReachingHome;
@@ -44,7 +44,7 @@ class Move {
   final List<BoardCoordinate> trajectory;
 
   const Move({
-    required this.pawnId,
+    required this.tokenId,
     required this.playerColor,
     required this.diceRoll,
     required this.fromPosition,
@@ -52,54 +52,15 @@ class Move {
     required this.fromRelativeStep,
     required this.toRelativeStep,
     this.isCapture = false,
-    this.capturedPawnId,
+    this.capturedTokenId,
     this.isReachingHome = false,
     this.isYardExit = false,
     this.grantsExtraTurn = false,
     this.trajectory = const [],
   });
 
-  /// Factory constructor using Token nomenclature
-  factory Move.token({
-    required String tokenId,
-    required PlayerColor playerColor,
-    required int diceRoll,
-    required BoardPosition fromPosition,
-    required BoardPosition toPosition,
-    required int fromRelativeStep,
-    required int toRelativeStep,
-    bool isCapture = false,
-    String? capturedTokenId,
-    bool isReachingHome = false,
-    bool isBaseExit = false,
-    bool grantsExtraTurn = false,
-    List<BoardCoordinate> trajectory = const [],
-  }) {
-    return Move(
-      pawnId: tokenId,
-      playerColor: playerColor,
-      diceRoll: diceRoll,
-      fromPosition: fromPosition,
-      toPosition: toPosition,
-      fromRelativeStep: fromRelativeStep,
-      toRelativeStep: toRelativeStep,
-      isCapture: isCapture,
-      capturedPawnId: capturedTokenId,
-      isReachingHome: isReachingHome,
-      isYardExit: isBaseExit,
-      grantsExtraTurn: grantsExtraTurn,
-      trajectory: trajectory,
-    );
-  }
-
-  // Token nomenclature getters
-  String get tokenId => pawnId;
-  String? get capturedTokenId => capturedPawnId;
-  bool get isBaseExit => isYardExit;
-
   Map<String, dynamic> toJson() => {
-        'pawnId': pawnId,
-        'tokenId': pawnId,
+        'tokenId': tokenId,
         'playerColor': playerColor.name,
         'diceRoll': diceRoll,
         'fromPosition': fromPosition.toJson(),
@@ -107,17 +68,16 @@ class Move {
         'fromRelativeStep': fromRelativeStep,
         'toRelativeStep': toRelativeStep,
         'isCapture': isCapture,
-        'capturedPawnId': capturedPawnId,
-        'capturedTokenId': capturedPawnId,
+        'capturedTokenId': capturedTokenId,
         'isReachingHome': isReachingHome,
         'isYardExit': isYardExit,
-        'isBaseExit': isYardExit,
         'grantsExtraTurn': grantsExtraTurn,
         'trajectory': trajectory.map((c) => c.toJson()).toList(),
       };
 
+  /// Also reads the older "pawn"/"base" key names found in earlier saves.
   factory Move.fromJson(Map<String, dynamic> json) => Move(
-        pawnId: (json['pawnId'] ?? json['tokenId']) as String,
+        tokenId: (json['tokenId'] ?? json['pawnId']) as String,
         playerColor: PlayerColor.fromString(json['playerColor'] as String),
         diceRoll: json['diceRoll'] as int,
         fromPosition: BoardPosition.fromJson(
@@ -127,8 +87,8 @@ class Move {
         fromRelativeStep: json['fromRelativeStep'] as int,
         toRelativeStep: json['toRelativeStep'] as int,
         isCapture: json['isCapture'] as bool? ?? false,
-        capturedPawnId:
-            (json['capturedPawnId'] ?? json['capturedTokenId']) as String?,
+        capturedTokenId:
+            (json['capturedTokenId'] ?? json['capturedPawnId']) as String?,
         isReachingHome: json['isReachingHome'] as bool? ?? false,
         isYardExit:
             (json['isYardExit'] ?? json['isBaseExit']) as bool? ?? false,
@@ -143,26 +103,26 @@ class Move {
       identical(this, other) ||
       other is Move &&
           runtimeType == other.runtimeType &&
-          pawnId == other.pawnId &&
+          tokenId == other.tokenId &&
           playerColor == other.playerColor &&
           diceRoll == other.diceRoll &&
           fromPosition == other.fromPosition &&
           toPosition == other.toPosition &&
           isCapture == other.isCapture &&
-          capturedPawnId == other.capturedPawnId;
+          capturedTokenId == other.capturedTokenId;
 
   @override
   int get hashCode => Object.hash(
-        pawnId,
+        tokenId,
         playerColor,
         diceRoll,
         fromPosition,
         toPosition,
         isCapture,
-        capturedPawnId,
+        capturedTokenId,
       );
 
   @override
   String toString() =>
-      'Move($pawnId: $fromPosition -> $toPosition, roll: $diceRoll, capture: $isCapture)';
+      'Move($tokenId: $fromPosition -> $toPosition, roll: $diceRoll, capture: $isCapture)';
 }

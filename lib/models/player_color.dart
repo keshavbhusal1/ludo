@@ -1,35 +1,15 @@
 /// The four canonical player colors in Ludo arranged clockwise.
 enum PlayerColor {
-  red(
-    startTrackIndex: 1,
-    homeEntranceTrackIndex: 51,
-    starTrackIndex: 9,
-  ),
-  green(
-    startTrackIndex: 14,
-    homeEntranceTrackIndex: 12,
-    starTrackIndex: 22,
-  ),
-  yellow(
-    startTrackIndex: 27,
-    homeEntranceTrackIndex: 25,
-    starTrackIndex: 35,
-  ),
-  blue(
-    startTrackIndex: 40,
-    homeEntranceTrackIndex: 38,
-    starTrackIndex: 48,
-  );
+  red(startTrackIndex: 1),
+  green(startTrackIndex: 14),
+  yellow(startTrackIndex: 27),
+  blue(startTrackIndex: 40);
 
+  /// Common-track index of this color's start square. Its home-column
+  /// entrance is 50 steps on (see [BoardPathRegistry.getCoordinateForStep]).
   final int startTrackIndex;
-  final int homeEntranceTrackIndex;
-  final int starTrackIndex;
 
-  const PlayerColor({
-    required this.startTrackIndex,
-    required this.homeEntranceTrackIndex,
-    required this.starTrackIndex,
-  });
+  const PlayerColor({required this.startTrackIndex});
 
   /// Name formatted for display (e.g. "Red").
   String get displayName => name[0].toUpperCase() + name.substring(1);

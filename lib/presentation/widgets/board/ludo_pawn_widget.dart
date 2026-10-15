@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../models/pawn.dart';
+import '../../../models/token.dart';
 
 /// Authentic physical-feel Ludo token with gentle bounce animation when movable.
 class LudoPawnWidget extends StatefulWidget {
-  final Pawn pawn;
+  final Token pawn;
   final double size;
   final bool isMovable;
   final VoidCallback? onTap;

@@ -28,7 +28,7 @@ void main() {
   });
 
   Move move({bool capture = false, bool home = false}) => Move(
-        pawnId: 'red_0',
+        tokenId: 'red_0',
         playerColor: PlayerColor.red,
         diceRoll: 3,
         fromPosition: const BoardPosition.track(trackIndex: 1, relativeStep: 0),
@@ -38,7 +38,7 @@ void main() {
         fromRelativeStep: home ? 53 : 0,
         toRelativeStep: home ? 56 : 3,
         isCapture: capture,
-        capturedPawnId: capture ? 'green_0' : null,
+        capturedTokenId: capture ? 'green_0' : null,
         isReachingHome: home,
       );
 

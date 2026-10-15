@@ -96,7 +96,7 @@ void main() {
       final loaded = (await ds.loadGame())!;
 
       expect(loaded.history.single.outcome, TurnOutcome.moved);
-      expect(loaded.history.single.move?.pawnId, choosing.validMoves.first.pawnId);
+      expect(loaded.history.single.move?.tokenId, choosing.validMoves.first.tokenId);
       expect(loaded.history.single.description, 'rolled 3 — moved a token 3 spaces');
       expect(loaded.undoStack.single.historyLength, 0);
       expect(loaded.undoStack.single.state.validMoves, hasLength(2));
@@ -191,6 +191,76 @@ void main() {
       });
       final result = await LudoRepositoryImpl(localDataSource: ds).getSavedGame();
       expect(result.isLeft(), isTrue);
+    });
+  });
+
+  group('legacy key names', () {
+    test('a save written with the old key names still loads', () {
+      Map<String, Object?> token(String color, int i, Map<String, Object?> pos) =>
+          {'id': '${color}_$i', 'color': color, 'index': i, 'position': pos};
+      const inYard = {'type': 'inYard', 'slotIndex': 0};
+
+      final legacy = {
+        'id': 'old_save',
+        'rules': {'winCondition': 'quick2', 'consecutiveSixesLimit': 2},
+        'turnPhase': 'awaitingPawnSelection',
+        'consecutiveSixes': 1,
+        'activePlayerIndex': 0,
+        'players': [
+          {
+            'color': 'red',
+            'name': 'Red',
+            'hasCapturedOpponent': true,
+            'pawns': [
+              token('red', 0, {'type': 'onTrack', 'trackIndex': 4, 'relativeStep': 3}),
+              token('red', 1, {'type': 'inHomeRun', 'homeRunStep': 2}),
+              token('red', 2, {'type': 'finished'}),
+              token('red', 3, {...inYard, 'slotIndex': 3}),
+            ],
+          },
+          {
+            'color': 'green',
+            'name': 'Green',
+            'pawns': [for (var i = 0; i < 4; i++) token('green', i, {...inYard, 'slotIndex': i})],
+          },
+        ],
+        'validMoves': [
+          {
+            'pawnId': 'red_0',
+            'playerColor': 'red',
+            'diceRoll': 6,
+            'fromPosition': {'type': 'onTrack', 'trackIndex': 4, 'relativeStep': 3},
+            'toPosition': {'type': 'onTrack', 'trackIndex': 10, 'relativeStep': 9},
+            'fromRelativeStep': 3,
+            'toRelativeStep': 9,
+            'isBaseExit': false,
+          },
+        ],
+      };
+
+      final loaded = SavedMatch.fromJson(jsonDecode(jsonEncode(legacy)) as Map<String, dynamic>).game;
+      expect(loaded.config.mode, isA<RushMode>());
+      expect(loaded.config.consecutiveSixesLimit, 2);
+      expect(loaded.fsmState, LudoFsmState.waitingForSelection);
+      expect(loaded.consecutiveSixesCount, 1);
+      final red = loaded.players[0];
+      expect(red.hasKilledOpponent, isTrue);
+      expect(red.tokens.map((t) => t.relativeStep), [3, 53, 56, -1]);
+      expect(loaded.validMoves.single.tokenId, 'red_0');
+
+      // Still playable: the stored move applies
+      final next = const LudoEngine().executeMove(loaded, loaded.validMoves.single);
+      expect(next.players[0].tokens[0].relativeStep, 9);
+    });
+
+    test('new saves no longer write the duplicate legacy keys', () {
+      final choosing = redChoosing();
+      final json = jsonEncode(SavedMatch(game: choosing).toJson());
+      for (final key in ['"rules"', '"turnPhase"', '"consecutiveSixes"', '"pawnId"',
+          '"capturedPawnId"', '"isBaseExit"', '"currentAnimatingMove"', '"rank"']) {
+        expect(json.contains(key), isFalse, reason: '$key is no longer written');
+      }
+      expect(json.contains('"tokenId"'), isTrue);
     });
   });
 }

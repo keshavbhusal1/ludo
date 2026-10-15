@@ -169,9 +169,6 @@ class BoardPathRegistry {
     48, // Star 4
   };
 
-  /// Sequential list of 8 global safe squares.
-  static const List<int> safeTrackSquares = [1, 9, 14, 22, 27, 35, 40, 48];
-
   /// Returns true if the common track index is a designated safe zone.
   static bool isSafeTrackIndex(int trackIndex) => safeTrackIndices.contains(trackIndex);
 
@@ -193,13 +190,6 @@ class BoardPathRegistry {
     } else {
       return homeCenters[color]!;
     }
-  }
-
-  /// Calculates the common track index given a player color and their relative step.
-  /// Returns null if the relative step has advanced past the common track into the home run.
-  static int? getTrackIndexForStep(PlayerColor color, int relativeStep) {
-    if (relativeStep < 0 || relativeStep > 50) return null;
-    return (color.startTrackIndex + relativeStep) % totalCommonTiles;
   }
 
   /// Calculates the step-by-step path between two relative steps.

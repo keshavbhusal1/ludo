@@ -11,7 +11,6 @@ class Player {
   final bool hasKilledOpponent;
   final int strikes;
   final bool isDisconnected;
-  final int? rank;
 
   const Player({
     required this.id,
@@ -22,7 +21,6 @@ class Player {
     this.hasKilledOpponent = false,
     this.strikes = 0,
     this.isDisconnected = false,
-    this.rank,
   }) : assert(tokens.length == 4, 'A Ludo player must have exactly 4 tokens');
 
   /// Creates a player with 4 initial tokens.
@@ -54,26 +52,11 @@ class Player {
     );
   }
 
-  // Compatibility getters for Pawn nomenclature
-  List<Token> get pawns => tokens;
-  bool get hasCapturedOpponent => hasKilledOpponent;
-  int get finishedPawnCount => finishedTokenCount;
-
   /// Whether a bot plays this seat: a bot from the start, or a human whose
   /// seat was taken over after too many turn timeouts.
   bool get isBotControlled => isAi || isDisconnected;
 
-  bool get isFinished => tokens.every((t) => t.isGoal);
   int get finishedTokenCount => tokens.where((t) => t.isGoal).length;
-
-  List<Token> get tokensInBase => tokens.where((t) => t.isInBase).toList();
-  List<Token> get tokensOnTrack => tokens.where((t) => t.isOnTrack).toList();
-  List<Token> get tokensInHomeColumn =>
-      tokens.where((t) => t.isInHomeColumn).toList();
-
-  List<Token> get pawnsInYard => tokensInBase;
-  List<Token> get pawnsOnTrack => tokensOnTrack;
-  List<Token> get pawnsInHomeRun => tokensInHomeColumn;
 
   Player copyWith({
     String? id,
@@ -81,24 +64,19 @@ class Player {
     String? name,
     bool? isAi,
     List<Token>? tokens,
-    List<Token>? pawns,
     bool? hasKilledOpponent,
-    bool? hasCapturedOpponent,
     int? strikes,
     bool? isDisconnected,
-    int? rank,
   }) {
     return Player(
       id: id ?? this.id,
       color: color ?? this.color,
       name: name ?? this.name,
       isAi: isAi ?? this.isAi,
-      tokens: tokens ?? pawns ?? this.tokens,
-      hasKilledOpponent:
-          hasKilledOpponent ?? hasCapturedOpponent ?? this.hasKilledOpponent,
+      tokens: tokens ?? this.tokens,
+      hasKilledOpponent: hasKilledOpponent ?? this.hasKilledOpponent,
       strikes: strikes ?? this.strikes,
       isDisconnected: isDisconnected ?? this.isDisconnected,
-      rank: rank ?? this.rank,
     );
   }
 
@@ -111,7 +89,6 @@ class Player {
         'hasKilledOpponent': hasKilledOpponent,
         'strikes': strikes,
         'isDisconnected': isDisconnected,
-        'rank': rank,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) {
@@ -138,7 +115,6 @@ class Player {
           false,
       strikes: json['strikes'] as int? ?? 0,
       isDisconnected: json['isDisconnected'] as bool? ?? false,
-      rank: json['rank'] as int?,
     );
   }
 
@@ -153,8 +129,7 @@ class Player {
           isAi == other.isAi &&
           hasKilledOpponent == other.hasKilledOpponent &&
           strikes == other.strikes &&
-          isDisconnected == other.isDisconnected &&
-          rank == other.rank;
+          isDisconnected == other.isDisconnected;
 
   @override
   int get hashCode => Object.hash(
@@ -165,10 +140,9 @@ class Player {
         hasKilledOpponent,
         strikes,
         isDisconnected,
-        rank,
       );
 
   @override
   String toString() =>
-      'Player($name, color: ${color.name}, killed: $hasKilledOpponent, finished: $isFinished)';
+      'Player($name, color: ${color.name}, killed: $hasKilledOpponent, home: $finishedTokenCount/4)';
 }

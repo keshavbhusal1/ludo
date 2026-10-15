@@ -17,10 +17,6 @@ sealed class BoardPosition {
   /// Whether the token has reached the final Home/Goal center.
   bool get isGoal => this is BoardPositionGoal;
 
-  // Compatibility aliases
-  bool get isInYard => isInBase;
-  bool get isInHomeRun => isInHomeColumn;
-  bool get isFinished => isGoal;
 
   Map<String, dynamic> toJson();
 
@@ -141,8 +137,6 @@ class BoardPositionHomeColumn extends BoardPosition {
   }) : assert(
             columnStep >= 0 && columnStep <= 4, 'Column step must be 0..4');
 
-  /// Compatibility alias for homeRunStep
-  int get homeRunStep => columnStep;
 
   @override
   int get relativeStep => 51 + columnStep;

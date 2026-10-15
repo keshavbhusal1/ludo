@@ -79,12 +79,6 @@ class GameRules {
         assert(turnTimerMaxStrikes >= 0, 'Strike limit must be 0 (never) or more'),
         assert(consecutiveSixesLimit >= 0, 'Sixes limit must be 0 (none) or more');
 
-  /// Converts GameRules to GameConfig.
-  dynamic toGameConfig() {
-    // Return dynamically or statically typed if game_config is imported
-    return this;
-  }
-
   GameRules copyWith({
     WinCondition? winCondition,
     AiDifficulty? aiDifficulty,

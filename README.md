@@ -86,8 +86,7 @@ lib/
 │   ├── board_position.dart          # Sealed token position (base/track/home column/goal)
 │   ├── move.dart                    # A legal move and its hop trajectory
 │   ├── history_entry.dart           # One resolved roll in the move history
-│   ├── saved_match.dart             # Persisted match: game + history + undo points
-│   └── pawn.dart, pawn_position.dart  # Legacy aliases for Token / BoardPosition
+│   └── saved_match.dart             # Persisted match: game + history + undo points
 ├── features/ludo/
 │   ├── data/
 │   │   ├── datasources/ludo_local_data_source.dart  # shared_preferences JSON storage
@@ -99,14 +98,13 @@ lib/
 │       ├── bloc/                    # LudoBloc, events, states
 │       └── screens/ludo_game_screen.dart
 └── presentation/
-    ├── screens/ludo_game_screen.dart  # Re-export of the feature screen
     ├── themes/board_theme.dart        # The four board themes
     └── widgets/
         ├── board/                   # Board painter, board widget, pawn widget
-        ├── dialogs/game_setup_dialog.dart
+        ├── dialogs/                 # Match settings, reclaim-seat confirmation
         ├── dice/                    # HUD dice and full-screen roll overlay
         ├── effects/confetti_overlay.dart
-        └── hud/                     # Player badges, move history sheet
+        └── hud/                     # Player badges, move history sheet, turn countdown
 ```
 
 ### Saved-game format
@@ -140,8 +138,6 @@ The haptics on/off choice is stored separately under `haptics_enabled`.
 | `bloc_test` (dev) | BLoC tests |
 | `flutter_lints` (dev) | Lint rules |
 
-`cupertino_icons` and `mocktail` are declared in `pubspec.yaml` but not currently used.
-
 ### Run
 
 ```bash
@@ -162,7 +158,7 @@ flutter analyze   # static analysis
 |---|---|
 | `test/ludo_engine_test.dart` | Board topology, rules (captures, safe squares, exact home, sixes, mandatory capture), game modes, serialization, AI scoring |
 | `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume, turn timer (timeouts, strikes, bot takeover, background pause, reclaiming a seat) |
-| `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1/v2 compatibility (timer off), history and undo persistence |
+| `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1/v2 compatibility (timer off), saves using older key names, history and undo persistence |
 | `test/widget_test.dart` | Screen loads, dice overlay, undo button and history sheet |
 | `test/presentation/widgets/player_badge_widget_test.dart` | Bot and AUTO markers, screen-reader labels, badge rows fitting a 360-wide phone, tap-to-reclaim and its confirm dialog |
 | `test/presentation/widgets/game_setup_dialog_test.dart` | Game speed, sixes limit, and turn-timer settings (on/off, time per turn, strike limit) are preselected, changeable, and returned, including non-standard values |
@@ -179,7 +175,6 @@ Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. I
 
 ## 🚧 Known gaps
 
-- **Unused and legacy code:** `player_station_widget.dart` is unused, and `pawn.dart`, `pawn_position.dart`, and `TurnPhase` are kept as legacy aliases.
 - **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
 
 ---
