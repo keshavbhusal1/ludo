@@ -101,7 +101,7 @@ void main() {
     expect(find.text('No moves yet'), findsOneWidget);
   });
 
-  testWidgets('the haptics button toggles, updates, and remembers the choice', (tester) async {
+  testWidgets('the haptics menu item toggles, updates, and remembers the choice', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -112,20 +112,48 @@ void main() {
     await tester.pump();
     expect(HapticsService.isEnabled, isTrue);
 
-    await tester.tap(find.byTooltip('Haptics'));
-    await tester.pump();
+    Future<void> chooseFromMenu(String label) async {
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    await chooseFromMenu('Turn haptics off');
     expect(tester.takeException(), isNull, reason: 'setState must not get a Future');
     expect(HapticsService.isEnabled, isFalse);
-    expect(find.byIcon(Icons.phone_android), findsOneWidget, reason: 'icon shows off');
     expect(find.text('Haptics Off'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(HapticsService.enabledKey), isFalse, reason: 'saved');
 
-    await tester.tap(find.byTooltip('Haptics'));
-    await tester.pump();
+    await chooseFromMenu('Turn haptics on');
     expect(tester.takeException(), isNull);
     expect(HapticsService.isEnabled, isTrue);
-    expect(find.byIcon(Icons.vibration), findsWidgets);
     expect(prefs.getBool(HapticsService.enabledKey), isTrue);
+  });
+
+  testWidgets('small phone: no overflow, full title, one prompt, badges on the board corners',
+      (tester) async {
+    tester.view.physicalSize = const Size(720, 1280); // 360 x 640 logical
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const LudoApp());
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'no layout overflow');
+
+    expect(find.text('Ludo · Classic'), findsOneWidget);
+    expect(find.text("Red's turn"), findsOneWidget);
+    expect(find.textContaining('Tap the dice to roll'), findsOneWidget, reason: 'said once, not twice');
+
+    final board = tester.getRect(find.byType(LudoBoardWidget));
+    final rows = find.byType(PlayerBadgeRow);
+    expect(rows, findsNWidgets(2));
+    for (final row in rows.evaluate()) {
+      final rect = tester.getRect(find.byWidget(row.widget));
+      expect(rect.width, closeTo(board.width, 1), reason: 'badge rows span the board');
+      expect(rect.left, closeTo(board.left, 1));
+    }
   });
 }

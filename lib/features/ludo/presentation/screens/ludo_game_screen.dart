@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/services/haptics_service.dart';
+import '../../../../models/game_rules.dart';
 import '../../../../models/game_state.dart';
 import '../../../../models/move.dart';
 import '../../../../models/player.dart';
@@ -131,6 +132,33 @@ class _LudoGameScreenState extends State<LudoGameScreen>
     }
   }
 
+  void _toggleHaptics() {
+    // Flips the flag at once; saving it finishes in the background.
+    // (setState's callback must not return that Future.)
+    HapticsService.setEnabled(!HapticsService.isEnabled);
+    setState(() {});
+    _showSnackbar(
+      HapticsService.isEnabled ? 'Haptics On' : 'Haptics Off',
+      icon: Icons.vibration,
+      iconColor: const Color(0xFF60A5FA),
+    );
+  }
+
+  static Widget _menuRow(IconData icon, String label) => Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.white70),
+          const SizedBox(width: 12),
+          Text(label, style: const TextStyle(color: Colors.white)),
+        ],
+      );
+
+  /// Short mode name for the app bar title.
+  static String _modeName(WinCondition mode) => switch (mode) {
+        WinCondition.classic => 'Classic',
+        WinCondition.quick1 => 'Quick',
+        WinCondition.quick2 => 'Rush',
+      };
+
   /// Confirms, then hands a taken-over seat back to its human.
   Future<void> _reclaimSeat(PlayerColor color) async {
     final bloc = context.read<LudoBloc>();
@@ -175,24 +203,12 @@ class _LudoGameScreenState extends State<LudoGameScreen>
       final winner = game.winner;
       return winner != null ? '🎉 ${winner.displayName} Wins the Game!' : 'Match Ended!';
     }
-    final active = game.activePlayer;
+    // Whose turn only; what to do goes on the line below (one prompt, not two)
     if (state.isShowingRollOverlay) {
-      final roller = state.rollerPlayer ?? active;
-      return '${roller.name} is rolling the dice...';
-    } else if (game.fsmState == LudoFsmState.waitingForRoll) {
-      if (active.isBotControlled) {
-        return '${active.name} is rolling the dice...';
-      } else {
-        return "${active.name}'s turn — Tap the dice to roll";
-      }
-    } else if (game.fsmState == LudoFsmState.waitingForSelection) {
-      if (active.isBotControlled) {
-        return '${active.name} is moving token...';
-      } else {
-        return 'Tap a highlighted token to move';
-      }
+      final roller = state.rollerPlayer ?? game.activePlayer;
+      return '${roller.name} is rolling the dice…';
     }
-    return '';
+    return "${game.activePlayer.name}'s turn";
   }
 
   @override
@@ -258,7 +274,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    'Ludo (${gameState.rules.winCondition.displayName})',
+                    'Ludo · ${_modeName(gameState.rules.winCondition)}',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
@@ -289,39 +305,38 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                 tooltip: 'Move history',
                 onPressed: () => MoveHistorySheet.show(context),
               ),
-              // Mute / Haptics Toggle
-              IconButton(
-                icon: Icon(
-                  HapticsService.isEnabled ? Icons.vibration : Icons.phone_android,
-                  color: HapticsService.isEnabled ? Colors.white : Colors.white38,
-                  size: 20,
-                ),
-                tooltip: 'Haptics',
-                onPressed: () {
-                  // Flips the flag at once; saving it finishes in the background.
-                  // (setState's callback must not return that Future.)
-                  HapticsService.setEnabled(!HapticsService.isEnabled);
-                  setState(() {});
-                  _showSnackbar(
-                    HapticsService.isEnabled ? 'Haptics On' : 'Haptics Off',
-                    icon: Icons.vibration,
-                    iconColor: const Color(0xFF60A5FA),
-                  );
-                },
-              ),
-              // Restart Match
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                tooltip: 'Restart Match',
-                onPressed: () {
-                  context.read<LudoBloc>().add(const LudoMatchRestarted());
-                },
-              ),
               // Settings Modal
               IconButton(
                 icon: const Icon(Icons.settings, color: Colors.white, size: 20),
                 tooltip: 'Settings',
                 onPressed: () => _openMatchSetup(state),
+              ),
+              // Less frequent actions, so the title has room
+              PopupMenuButton<_MenuAction>(
+                tooltip: 'More',
+                icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                color: const Color(0xFF1E293B),
+                onSelected: (action) {
+                  switch (action) {
+                    case _MenuAction.toggleHaptics:
+                      _toggleHaptics();
+                    case _MenuAction.restart:
+                      context.read<LudoBloc>().add(const LudoMatchRestarted());
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: _MenuAction.toggleHaptics,
+                    child: _menuRow(
+                      HapticsService.isEnabled ? Icons.phone_android : Icons.vibration,
+                      HapticsService.isEnabled ? 'Turn haptics off' : 'Turn haptics on',
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.restart,
+                    child: _menuRow(Icons.refresh, 'Restart match'),
+                  ),
+                ],
               ),
               const SizedBox(width: 4),
             ],
@@ -375,66 +390,65 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                           ),
                         ),
 
-                      const SizedBox(height: 6),
-
-                      // TOP ROW: Compact Red (TL) & Green (TR) Badges
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: PlayerBadgeRow(
-                          left: getPlayer(PlayerColor.red),
-                          right: getPlayer(PlayerColor.green),
-                          activeColor: activePlayer.color,
-                          tokensRequired: requiredTokens,
-                          onReclaim: _reclaimSeat,
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // CENTER: Responsive 1:1 Clean Ludo Board
-                      Center(
+                      // PLAY AREA: badges sit on the board's corners; the group is
+                      // centered in the space between the app bar and the HUD.
+                      Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final boardSize = min(
-                              constraints.maxWidth * 0.94,
-                              constraints.maxHeight * 0.94,
+                            const badgeRowHeight = 44.0;
+                            const gap = 8.0;
+                            final boardSize = max(
+                              0.0,
+                              min(
+                                constraints.maxWidth * 0.94,
+                                constraints.maxHeight - 2 * (badgeRowHeight + gap),
+                              ),
                             );
 
-                            return SizedBox(
-                              width: boardSize,
-                              height: boardSize,
-                              child: AnimatedBuilder(
-                                animation: _pawnHopController,
-                                builder: (context, _) => LudoBoardWidget(
-                                  gameState: gameState,
-                                  onMoveSelected: (move) {
-                                    context.read<LudoBloc>().add(LudoMoveSelected(move));
-                                  },
-                                  animatingMove: state.animatingMove,
-                                  animationProgress: _pawnHopController.value,
-                                  theme: currentTheme,
-                                ),
+                            Widget badgeRow(PlayerColor left, PlayerColor right) => SizedBox(
+                                  width: boardSize,
+                                  height: badgeRowHeight,
+                                  child: Center(
+                                    child: PlayerBadgeRow(
+                                      left: getPlayer(left),
+                                      right: getPlayer(right),
+                                      activeColor: activePlayer.color,
+                                      tokensRequired: requiredTokens,
+                                      onReclaim: _reclaimSeat,
+                                    ),
+                                  ),
+                                );
+
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  badgeRow(PlayerColor.red, PlayerColor.green),
+                                  const SizedBox(height: gap),
+                                  SizedBox(
+                                    width: boardSize,
+                                    height: boardSize,
+                                    child: AnimatedBuilder(
+                                      animation: _pawnHopController,
+                                      builder: (context, _) => LudoBoardWidget(
+                                        gameState: gameState,
+                                        onMoveSelected: (move) {
+                                          context.read<LudoBloc>().add(LudoMoveSelected(move));
+                                        },
+                                        animatingMove: state.animatingMove,
+                                        animationProgress: _pawnHopController.value,
+                                        theme: currentTheme,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: gap),
+                                  badgeRow(PlayerColor.blue, PlayerColor.yellow),
+                                ],
                               ),
                             );
                           },
                         ),
                       ),
-
-                      const Spacer(),
-
-                      // BOTTOM ROW: Compact Blue (BL) & Yellow (BR) Badges
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: PlayerBadgeRow(
-                          left: getPlayer(PlayerColor.blue),
-                          right: getPlayer(PlayerColor.yellow),
-                          activeColor: activePlayer.color,
-                          tokensRequired: requiredTokens,
-                          onReclaim: _reclaimSeat,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
 
                       // BOTTOM HUD: Single Shared Dice & Action Prompt
                       Container(
@@ -519,10 +533,10 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                         Flexible(
                                           child: Text(
                                             activePlayer.isBotControlled
-                                                ? 'Bot thinking...'
+                                                ? 'Bot thinking…'
                                                 : (isAwaitingRoll
                                                     ? 'Tap the dice to roll'
-                                                    : 'Tap a bouncing piece to move'),
+                                                    : 'Tap a highlighted token to move'),
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 12,
@@ -625,3 +639,5 @@ class _LudoGameScreenState extends State<LudoGameScreen>
     );
   }
 }
+
+enum _MenuAction { toggleHaptics, restart }

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/coordinates/board_coordinate.dart';
 import '../../../core/coordinates/board_path_registry.dart';
@@ -18,9 +19,14 @@ class LudoBoardPainter extends CustomPainter {
   final double borderRadius;
   final BoardTheme theme;
 
+  /// Colors with a player in this match; other yards are drawn dimmed and
+  /// empty. Null means every seat is taken.
+  final Set<PlayerColor>? seatedColors;
+
   const LudoBoardPainter({
     this.borderRadius = 16.0,
     this.theme = BoardTheme.darkModern,
+    this.seatedColors,
   });
 
   @override
@@ -70,6 +76,7 @@ class LudoBoardPainter extends CustomPainter {
       6 * cellSize,
       6 * cellSize,
     );
+    final isSeated = seatedColors?.contains(color) ?? true;
 
     // Outer colored quadrant
     final quadrantPaint = Paint()..color = Color(color.primaryColorValue);
@@ -100,6 +107,12 @@ class LudoBoardPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawRRect(innerRect, yardBorderPaint);
+
+    // An empty seat: no token slots, and the corner recedes
+    if (!isSeated) {
+      canvas.drawRect(yardRect, Paint()..color = Colors.black.withValues(alpha: 0.45));
+      return;
+    }
 
     // 4 circular pawn slots
     final slots = BoardPathRegistry.yardSlots[color]!;
@@ -374,5 +387,5 @@ class LudoBoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant LudoBoardPainter oldDelegate) =>
-      oldDelegate.theme != theme;
+      oldDelegate.theme != theme || !setEquals(oldDelegate.seatedColors, seatedColors);
 }

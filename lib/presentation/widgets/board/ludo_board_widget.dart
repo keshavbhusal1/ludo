@@ -59,6 +59,7 @@ class LudoBoardWidget extends StatelessWidget {
                       painter: LudoBoardPainter(
                         borderRadius: 16,
                         theme: theme,
+                        seatedColors: {for (final p in gameState.players) p.color},
                       ),
                     ),
                   ),
