@@ -59,6 +59,12 @@ class GameRules {
   /// player takes a strike. At the strike limit a bot takes over the seat.
   final bool turnTimerEnabled;
 
+  /// Seconds a human has for each decision when [turnTimerEnabled].
+  final int turnTimeLimitSeconds;
+
+  /// Timeouts after which a bot takes over the seat; 0 means never.
+  final int turnTimerMaxStrikes;
+
   const GameRules({
     this.winCondition = WinCondition.classic,
     this.aiDifficulty = AiDifficulty.medium,
@@ -67,7 +73,10 @@ class GameRules {
     this.consecutiveSixesLimit = 3,
     this.gameSpeed = 1.0,
     this.turnTimerEnabled = false,
-  });
+    this.turnTimeLimitSeconds = 12,
+    this.turnTimerMaxStrikes = 3,
+  })  : assert(turnTimeLimitSeconds > 0, 'Turn time limit must be positive'),
+        assert(turnTimerMaxStrikes >= 0, 'Strike limit must be 0 (never) or more');
 
   /// Converts GameRules to GameConfig.
   dynamic toGameConfig() {
@@ -83,6 +92,8 @@ class GameRules {
     int? consecutiveSixesLimit,
     double? gameSpeed,
     bool? turnTimerEnabled,
+    int? turnTimeLimitSeconds,
+    int? turnTimerMaxStrikes,
   }) {
     return GameRules(
       winCondition: winCondition ?? this.winCondition,
@@ -94,6 +105,8 @@ class GameRules {
           consecutiveSixesLimit ?? this.consecutiveSixesLimit,
       gameSpeed: gameSpeed ?? this.gameSpeed,
       turnTimerEnabled: turnTimerEnabled ?? this.turnTimerEnabled,
+      turnTimeLimitSeconds: turnTimeLimitSeconds ?? this.turnTimeLimitSeconds,
+      turnTimerMaxStrikes: turnTimerMaxStrikes ?? this.turnTimerMaxStrikes,
     );
   }
 
@@ -105,6 +118,8 @@ class GameRules {
         'consecutiveSixesLimit': consecutiveSixesLimit,
         'gameSpeed': gameSpeed,
         'turnTimerEnabled': turnTimerEnabled,
+        'turnTimeLimitSeconds': turnTimeLimitSeconds,
+        'turnTimerMaxStrikes': turnTimerMaxStrikes,
       };
 
   factory GameRules.fromJson(Map<String, dynamic> json) => GameRules(
@@ -119,6 +134,8 @@ class GameRules {
         consecutiveSixesLimit: json['consecutiveSixesLimit'] as int? ?? 3,
         gameSpeed: (json['gameSpeed'] as num?)?.toDouble() ?? 1.0,
         turnTimerEnabled: json['turnTimerEnabled'] as bool? ?? false,
+        turnTimeLimitSeconds: json['turnTimeLimitSeconds'] as int? ?? 12,
+        turnTimerMaxStrikes: json['turnTimerMaxStrikes'] as int? ?? 3,
       );
 
   @override
@@ -132,7 +149,9 @@ class GameRules {
           unlockYardOnOneOrSix == other.unlockYardOnOneOrSix &&
           consecutiveSixesLimit == other.consecutiveSixesLimit &&
           gameSpeed == other.gameSpeed &&
-          turnTimerEnabled == other.turnTimerEnabled;
+          turnTimerEnabled == other.turnTimerEnabled &&
+          turnTimeLimitSeconds == other.turnTimeLimitSeconds &&
+          turnTimerMaxStrikes == other.turnTimerMaxStrikes;
 
   @override
   int get hashCode => Object.hash(
@@ -143,6 +162,8 @@ class GameRules {
         consecutiveSixesLimit,
         gameSpeed,
         turnTimerEnabled,
+        turnTimeLimitSeconds,
+        turnTimerMaxStrikes,
       );
 
   @override

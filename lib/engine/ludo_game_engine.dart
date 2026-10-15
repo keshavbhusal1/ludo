@@ -323,7 +323,7 @@ class LudoEngine {
 
   /// Records an expired turn timer against the active player: one strike,
   /// and at the configured maximum the seat is marked disconnected (from then
-  /// on [Player.isBotControlled]).
+  /// on [Player.isBotControlled]). A maximum of 0 never takes the seat.
   ///
   /// The turn itself is unchanged: the caller plays it automatically.
   GameState handleTurnTimeout(GameState state) {
@@ -331,8 +331,9 @@ class LudoEngine {
 
     final active = state.activePlayer;
     final updatedStrikes = active.strikes + 1;
+    final maxStrikes = state.config.timerConfig.maxStrikes;
     final isDisconnected = active.isDisconnected ||
-        updatedStrikes >= state.config.timerConfig.maxStrikes;
+        (maxStrikes > 0 && updatedStrikes >= maxStrikes);
 
     return state.copyWith(
       players: [

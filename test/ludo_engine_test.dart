@@ -398,6 +398,45 @@ void main() {
   });
 
   group('Rules from setup dialog reach the engine config', () {
+    test('strike limit maps to the timer: 1 takes over at once, 0 never does', () {
+      const engine = LudoEngine();
+      GameState timed(int maxStrikes) => engine.newGame(
+            colors: [PlayerColor.red, PlayerColor.green],
+            rules: GameRules(turnTimerEnabled: true, turnTimerMaxStrikes: maxStrikes),
+          );
+
+      final once = timed(1);
+      expect(once.config.timerConfig.maxStrikes, 1);
+      expect(engine.handleTurnTimeout(once).players[0].isBotControlled, isTrue);
+
+      var never = timed(0);
+      for (var i = 0; i < 10; i++) {
+        never = engine.handleTurnTimeout(never);
+      }
+      expect(never.players[0].strikes, 10);
+      expect(never.players[0].isBotControlled, isFalse);
+
+      expect(timed(5).rules.turnTimerMaxStrikes, 5);
+      expect(GameRules.fromJson(timed(0).rules.toJson()).turnTimerMaxStrikes, 0);
+      expect(GameRules.fromJson(const {}).turnTimerMaxStrikes, 3, reason: 'default');
+    });
+
+    test('turn time limit maps to the timer and back, and survives JSON', () {
+      final controller = LudoGameController.newGame(
+        colors: [PlayerColor.red, PlayerColor.green],
+        rules: const GameRules(turnTimerEnabled: true, turnTimeLimitSeconds: 20),
+      );
+      final timer = controller.state.config.timerConfig;
+      expect(timer.enabled, isTrue);
+      expect(timer.turnTimeout, const Duration(seconds: 20));
+      expect(controller.state.rules.turnTimeLimitSeconds, 20);
+
+      final restored = GameState.fromJson(controller.state.toJson());
+      expect(restored.config.timerConfig.turnTimeout, const Duration(seconds: 20));
+      expect(GameRules.fromJson(controller.state.rules.toJson()).turnTimeLimitSeconds, 20);
+      expect(GameRules.fromJson(const {}).turnTimeLimitSeconds, 12, reason: 'default');
+    });
+
     test('newGame honours unlockYardOnOneOrSix and consecutiveSixesLimit', () {
       final controller = LudoGameController.newGame(
         colors: [PlayerColor.red, PlayerColor.green],

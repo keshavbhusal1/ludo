@@ -262,12 +262,20 @@ void main() {
     LudoActiveState stateOf(LudoBloc bloc) => bloc.state as LudoActiveState;
 
     /// Red (human) vs green (bot) with a 150 ms turn timer, adjusted by [edit].
-    GameState timedGame(GameState Function(GameState) edit, {bool timerOn = true}) =>
+    GameState timedGame(
+      GameState Function(GameState) edit, {
+      bool timerOn = true,
+      int maxStrikes = 3,
+    }) =>
         edit(engine.newGame(
           colors: const [PlayerColor.red, PlayerColor.green],
           aiConfig: const {PlayerColor.red: false, PlayerColor.green: true},
           config: GameConfig(
-            timerConfig: TimerConfig(enabled: timerOn, turnTimeout: timeout),
+            timerConfig: TimerConfig(
+              enabled: timerOn,
+              turnTimeout: timeout,
+              maxStrikes: maxStrikes,
+            ),
           ),
         ));
 
@@ -405,6 +413,29 @@ void main() {
       await bloc.close();
     });
 
+    test('a strike limit of 1 hands the seat over on the first timeout', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut, maxStrikes: 1));
+      await wait(250);
+      expect(stateOf(bloc).gameState.players[0].isBotControlled, isTrue);
+      expect(snackbars, contains('Red timed out once — a bot takes over'));
+      await bloc.close();
+    });
+
+    test('with no strike limit a timeout auto-plays but never takes the seat', () async {
+      final bloc = timedBloc(timedGame((g) {
+        final red = oneRedTokenOut(g).players[0].copyWith(strikes: 9);
+        return g.copyWith(players: [red, g.players[1]]);
+      }, maxStrikes: 0));
+      await wait(250);
+
+      final red = stateOf(bloc).gameState.players[0];
+      expect(red.strikes, 10);
+      expect(red.isBotControlled, isFalse);
+      expect(stateOf(bloc).animatingMove, isNotNull, reason: 'the turn was still auto-played');
+      expect(snackbars, contains('Red ran out of time — auto-playing'));
+      await bloc.close();
+    });
+
     /// Red's seat was taken over by a bot after 3 timeouts.
     GameState redTakenOver(GameState g) {
       final red = g.players[0].copyWith(strikes: 3, isDisconnected: true);
@@ -485,20 +516,24 @@ void main() {
       await bloc.close();
     });
 
-    test('restart keeps the timer setting', () async {
+    test('the chosen time limit is used and survives a restart', () async {
+      int secondsLeft(LudoBloc b) =>
+          (stateOf(b).turnDeadline!.difference(DateTime.now()).inMilliseconds / 1000).ceil();
+
       final bloc = buildBloc();
       bloc.add(const LudoStarted(
         colors: [PlayerColor.red, PlayerColor.green],
         aiConfig: {PlayerColor.red: false, PlayerColor.green: true},
-        rules: GameRules(turnTimerEnabled: true),
+        rules: GameRules(turnTimerEnabled: true, turnTimeLimitSeconds: 20),
       ));
       await wait(20);
-      expect(stateOf(bloc).turnDeadline, isNotNull);
+      expect(secondsLeft(bloc), 20);
 
       bloc.add(const LudoMatchRestarted());
       await wait(20);
       expect(stateOf(bloc).gameState.config.timerConfig.enabled, isTrue);
-      expect(stateOf(bloc).turnDeadline, isNotNull);
+      expect(stateOf(bloc).gameState.config.timerConfig.turnTimeout, const Duration(seconds: 20));
+      expect(secondsLeft(bloc), 20);
       await bloc.close();
     });
   });

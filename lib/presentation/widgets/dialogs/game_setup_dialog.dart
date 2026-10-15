@@ -31,6 +31,12 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   /// Multipliers offered for bot thinking, dice settling and pawn hops.
   static const List<double> _speedOptions = [1.0, 1.5, 2.0];
 
+  /// Seconds per human decision offered when the turn timer is on.
+  static const List<int> _timeLimitOptions = [8, 12, 20, 30];
+
+  /// Timeouts before a bot takes over the seat; 0 means never.
+  static const List<int> _maxStrikeOptions = [1, 3, 5, 0];
+
   int _playerCount = 4;
   final Map<PlayerColor, bool> _aiMap = {
     PlayerColor.red: false,
@@ -45,6 +51,8 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   bool _mustCapture = false;
   bool _unlockOneOrSix = false;
   bool _turnTimer = false;
+  int _turnSeconds = 12;
+  int _maxStrikes = 3;
 
   @override
   void initState() {
@@ -60,7 +68,58 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
       _mustCapture = config.rules.mustCaptureBeforeHome;
       _unlockOneOrSix = config.rules.unlockYardOnOneOrSix;
       _turnTimer = config.rules.turnTimerEnabled;
+      _turnSeconds = config.rules.turnTimeLimitSeconds;
+      _maxStrikes = config.rules.turnTimerMaxStrikes;
     }
+  }
+
+  /// One of a row of equal-width choices (game speed, time per turn).
+  Widget _optionChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3.0),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF0EA5E9) : const Color(0xFF334155),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? Colors.white : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFFCBD5E1),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Standard strike choices in display order (Never last), plus the current
+  /// value if it's non-standard so it stays selectable.
+  List<int> _strikeChoices() {
+    final counts = {
+      ..._maxStrikeOptions.where((n) => n > 0),
+      if (_maxStrikes > 0) _maxStrikes,
+    }.toList()
+      ..sort();
+    return [...counts, 0];
   }
 
   static String _speedLabel(double speed) =>
@@ -272,39 +331,13 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               ),
               const SizedBox(height: 6),
               Row(
-                children: _speedOptions.map((speed) {
-                  final isSelected = _gameSpeed == speed;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                      child: InkWell(
-                        onTap: () => setState(() => _gameSpeed = speed),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFF334155),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected ? Colors.white : Colors.transparent,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _speedLabel(speed),
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                children: _speedOptions
+                    .map((speed) => _optionChip(
+                          label: _speedLabel(speed),
+                          selected: _gameSpeed == speed,
+                          onTap: () => setState(() => _gameSpeed = speed),
+                        ))
+                    .toList(),
               ),
               const SizedBox(height: 16),
 
@@ -412,13 +445,46 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('Turn timer (12 s)', style: TextStyle(color: Colors.white, fontSize: 12)),
-                subtitle: const Text('On timeout a bot plays the turn; after 3 timeouts it takes over the seat', style: TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                title: const Text('Turn timer', style: TextStyle(color: Colors.white, fontSize: 12)),
+                subtitle: const Text('On timeout a bot plays that turn for the player', style: TextStyle(color: Color(0xFF64748B), fontSize: 10)),
                 value: _turnTimer,
                 activeThumbColor: const Color(0xFF3B82F6),
                 activeTrackColor: const Color(0xFF3B82F6).withValues(alpha: 0.5),
                 onChanged: (val) => setState(() => _turnTimer = val),
               ),
+              if (_turnTimer) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Time per turn',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  // Keep a non-standard current value (e.g. from code) selectable
+                  children: ({..._timeLimitOptions, _turnSeconds}.toList()..sort())
+                      .map((secs) => _optionChip(
+                            label: '$secs s',
+                            selected: _turnSeconds == secs,
+                            onTap: () => setState(() => _turnSeconds = secs),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Timeouts before a bot takes over',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: _strikeChoices()
+                      .map((n) => _optionChip(
+                            label: n == 0 ? 'Never' : '$n',
+                            selected: _maxStrikes == n,
+                            onTap: () => setState(() => _maxStrikes = n),
+                          ))
+                      .toList(),
+                ),
+              ],
             ],
           ),
         ),
@@ -438,6 +504,8 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               unlockYardOnOneOrSix: _unlockOneOrSix,
               gameSpeed: _gameSpeed,
               turnTimerEnabled: _turnTimer,
+              turnTimeLimitSeconds: _turnSeconds,
+              turnTimerMaxStrikes: _maxStrikes,
               // Not editable here; keep the current match's value
               consecutiveSixesLimit:
                   widget.initialConfig?.rules.consecutiveSixesLimit ?? 3,

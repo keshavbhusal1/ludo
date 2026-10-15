@@ -198,8 +198,10 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       clearTurnDeadline: true,
       sideEffect: LudoSnackbarEffect(
         struck.isDisconnected && !player.isDisconnected
-            ? "${player.name} timed out $maxStrikes times — a bot takes over"
-            : "${player.name} ran out of time (strike ${struck.strikes}/$maxStrikes) — auto-playing",
+            ? '${player.name} timed out ${maxStrikes == 1 ? 'once' : '$maxStrikes times'} — a bot takes over'
+            : maxStrikes == 0
+                ? '${player.name} ran out of time — auto-playing'
+                : '${player.name} ran out of time (strike ${struck.strikes}/$maxStrikes) — auto-playing',
         icon: Icons.timer_off,
         iconColor: const Color(0xFFF87171),
       ),

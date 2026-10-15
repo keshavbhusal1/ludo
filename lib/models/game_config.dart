@@ -5,7 +5,7 @@ class TimerConfig {
   /// Turn duration timeout (default 12 seconds).
   final Duration turnTimeout;
 
-  /// Maximum strikes allowed before penalty / disconnect (default 3 strikes).
+  /// Timeouts after which a bot takes over the seat (default 3); 0 means never.
   final int maxStrikes;
 
   /// Whether the turn timer is actively enforced (opt-in).
@@ -218,7 +218,11 @@ class GameConfig {
         WinCondition.quick2 => RushMode(mandatoryKillRequired: kill),
         WinCondition.classic => ClassicMode(mandatoryKillRequired: kill),
       },
-      timerConfig: TimerConfig(enabled: rules.turnTimerEnabled),
+      timerConfig: TimerConfig(
+        enabled: rules.turnTimerEnabled,
+        turnTimeout: Duration(seconds: rules.turnTimeLimitSeconds),
+        maxStrikes: rules.turnTimerMaxStrikes,
+      ),
       consecutiveSixesLimit: rules.consecutiveSixesLimit,
       unlockYardOnOneOrSix: rules.unlockYardOnOneOrSix,
       gameSpeed: rules.gameSpeed,

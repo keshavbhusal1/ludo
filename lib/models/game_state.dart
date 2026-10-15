@@ -123,6 +123,10 @@ class GameState {
         consecutiveSixesLimit: config.consecutiveSixesLimit,
         gameSpeed: config.gameSpeed,
         turnTimerEnabled: config.timerConfig.enabled,
+        // Rounded up: sub-second limits (tests) still map to a valid rule
+        turnTimeLimitSeconds:
+            (config.timerConfig.turnTimeout.inMilliseconds / 1000).ceil().clamp(1, 1 << 20),
+        turnTimerMaxStrikes: config.timerConfig.maxStrikes,
       );
 
   TurnPhase get turnPhase {
