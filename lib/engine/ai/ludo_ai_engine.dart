@@ -13,15 +13,15 @@ class LudoAiEngine {
 
   LudoAiEngine({Random? random}) : _random = random ?? Random();
 
-  /// Simulates realistic bot thinking time scaled dynamically by [gameSpeed].
-  Future<void> simulateThinkingDelay({
+  /// Realistic bot thinking time, scaled by [gameSpeed].
+  Duration thinkingDelay({
     int minMs = 550,
     int maxMs = 900,
     double gameSpeed = 1.0,
-  }) async {
+  }) {
     final rawDelay = minMs + _random.nextInt(maxMs - minMs + 1);
     final adjustedMs = (rawDelay / gameSpeed).clamp(150, 1000).toInt();
-    await Future.delayed(Duration(milliseconds: adjustedMs));
+    return Duration(milliseconds: adjustedMs);
   }
 
   /// Selects the best move among [validMoves] using difficulty-adjusted heuristics.

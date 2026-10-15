@@ -10,4 +10,4 @@ export '../models/pawn_position.dart';
 export '../models/player.dart';
 export '../models/player_color.dart';
 export '../models/token.dart';
-export 'ludo_game_controller.dart';
+export 'ludo_game_engine.dart';

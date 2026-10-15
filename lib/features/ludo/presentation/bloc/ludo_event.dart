@@ -71,6 +71,11 @@ final class LudoThemeChanged extends LudoEvent {
   const LudoThemeChanged(this.themeType);
 }
 
+/// Dispatched to rewind to the most recent human token choice (same dice).
+final class LudoUndoRequested extends LudoEvent {
+  const LudoUndoRequested();
+}
+
 /// Dispatched to restart current match with identical player config.
 final class LudoMatchRestarted extends LudoEvent {
   const LudoMatchRestarted();

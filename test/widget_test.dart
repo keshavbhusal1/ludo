@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ludo/bootstrap.dart';
 import 'package:ludo/app/app.dart';
+import 'package:ludo/features/ludo/data/datasources/ludo_local_data_source.dart';
 import 'package:ludo/models/player_color.dart';
 import 'package:ludo/presentation/screens/ludo_game_screen.dart';
 import 'package:ludo/presentation/widgets/board/ludo_board_widget.dart';
 import 'package:ludo/presentation/widgets/dice/animated_dice_widget.dart';
 import 'package:ludo/presentation/widgets/dice/full_screen_dice_roll_overlay.dart';
+import 'package:ludo/presentation/widgets/hud/move_history_sheet.dart';
 import 'package:ludo/presentation/widgets/hud/player_badge_widget.dart';
 
+import 'helpers/in_memory_local_data_source.dart';
+
 void main() {
+  // Runs outside testWidgets' fake-async zone: bootstrap awaits a real platform
+  // channel reply (SystemChrome) that would never arrive inside it.
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await bootstrap();
+    sl.unregister<LudoLocalDataSource>();
+    sl.registerLazySingleton<LudoLocalDataSource>(() => InMemoryLocalDataSource());
+  });
+
   testWidgets('Ludo game screen loads board, 4 player badges, and single shared dice HUD',
       (WidgetTester tester) async {
-    await bootstrap();
-
     // Set a phone portrait surface size for predictable testing
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
@@ -59,5 +71,32 @@ void main() {
 
     // After roll finishes, overlay disappears
     expect(find.byType(FullScreenDiceRollOverlay), findsNothing);
+  });
+
+  testWidgets('Undo starts disabled and the history sheet opens', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const LudoApp(
+      initialAiConfig: {
+        PlayerColor.red: false,
+        PlayerColor.green: false,
+        PlayerColor.yellow: false,
+        PlayerColor.blue: false,
+      },
+    ));
+    await tester.pump();
+
+    final undo = tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.undo));
+    expect(undo.onPressed, isNull);
+
+    await tester.tap(find.byTooltip('Move history'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400)); // sheet slide-in
+
+    expect(find.byType(MoveHistorySheet), findsOneWidget);
+    expect(find.text('No moves yet'), findsOneWidget);
   });
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'engine/ai/ludo_ai_engine.dart';
-import 'engine/ludo_game_controller.dart';
+import 'engine/ludo_game_engine.dart';
 import 'features/ludo/data/datasources/ludo_local_data_source.dart';
 import 'features/ludo/data/repositories/ludo_repository_impl.dart';
 import 'features/ludo/domain/repositories/ludo_repository.dart';
@@ -12,7 +13,6 @@ import 'features/ludo/domain/usecases/get_saved_game_use_case.dart';
 import 'features/ludo/domain/usecases/roll_dice_use_case.dart';
 import 'features/ludo/domain/usecases/save_game_use_case.dart';
 import 'features/ludo/presentation/bloc/ludo_bloc.dart';
-import 'models/player_color.dart';
 
 /// Global service locator instance.
 final sl = GetIt.instance;
@@ -26,9 +26,11 @@ Future<void> bootstrap() async {
   ]);
 
   if (!sl.isRegistered<LudoLocalDataSource>()) {
+    final prefs = await SharedPreferences.getInstance();
+
     // Data Sources
     sl.registerLazySingleton<LudoLocalDataSource>(
-      () => const LudoLocalDataSourceImpl(),
+      () => LudoLocalDataSourceImpl(prefs),
     );
 
     // Repositories
@@ -36,19 +38,8 @@ Future<void> bootstrap() async {
       () => LudoRepositoryImpl(localDataSource: sl()),
     );
 
-    // Engine & Controllers
-    sl.registerLazySingleton<LudoGameController>(
-      () => LudoGameController.newGame(
-        colors: const [
-          PlayerColor.red,
-          PlayerColor.green,
-          PlayerColor.yellow,
-          PlayerColor.blue,
-        ],
-        // The BLoC plays forced moves itself so they get animations and side effects.
-        autoExecuteSingleMove: false,
-      ),
-    );
+    // Engine (pure: holds no state, so one shared instance is safe)
+    sl.registerLazySingleton<LudoEngine>(() => const LudoEngine());
     sl.registerLazySingleton<LudoAiEngine>(
       () => LudoAiEngine(),
     );
@@ -73,7 +64,7 @@ Future<void> bootstrap() async {
     // Presentation BLoC (Factory for fresh instances per match session)
     sl.registerFactory<LudoBloc>(
       () => LudoBloc(
-        controller: sl(),
+        engine: sl(),
         rollDiceUseCase: sl(),
         executeMoveUseCase: sl(),
         getSavedGameUseCase: sl(),

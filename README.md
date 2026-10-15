@@ -1,148 +1,184 @@
-# 🎲 Ludo Offline - Pure Flutter Game Engine
+# 🎲 Ludo Offline
 
-A production-ready, completely offline 2D Ludo game built with Flutter. Designed with **Clean Architecture**, a deterministic pure Dart game engine, heuristic-driven offline bot AI, local state persistence, responsive `CustomPainter` rendering, and **zero external pub dependencies**.
-
----
-
-## 🌟 Key Features
-
-- **📱 Completely Offline & Zero Dependencies:** Operates 100% locally with zero network calls and zero third-party pub packages. Everything is crafted using the Flutter SDK and Dart standard libraries.
-- **📐 Mathematical Graph Coordinates (15×15):** Precise coordinate graph pathing with 52 perimeter tiles, 4 home yards (4 slots each), 4 colored home runs (5 tiles each), 8 safe zones (4 starts + 4 stars), and a center apex goal.
-- **🎲 Single Shared Dice & 3D Tumbling Overlay:**
-  - One central HUD dice displaying the active player's color.
-  - Full-screen tumbling 3D dice overlay with perspective tilt and dynamic pip face cycling on human roll.
-  - Seamless in-HUD rolling for offline bots to keep gameplay fluid and unobtrusive.
-- **🤖 Smart Heuristic Bot AI:**
-  - Multi-tier tactical evaluation: Opponent capture (`+100`), Safe zone advancement (`+60`), Token home entry (`+50`), Escape enemy threat (`+40`), and Yard breakout (`+20`).
-  - Humanized thinking delays (`600ms–900ms`) for natural game pacing.
-- **🎮 Multiple Game Modes & Flexible Rules:**
-  - **Classic Mode:** All 4 tokens must reach home to win.
-  - **Quick 1 Mode:** First token home wins.
-  - **Quick 2 Mode:** First 2 tokens home win.
-  - **Configurable Rules:** Capture required before entering home run, roll 1 or 6 to exit yard, 3 consecutive sixes penalty, and extra turns on 6 / capture / home token.
-- **🎨 Visual Themes:**
-  - **Dark Modern:** Deep slate navy (`#0F172A`) with vibrant primary accents.
-  - **Classic Wooden:** Warm textured wood board styling.
-  - **Cyberpunk Neon:** High-contrast synthwave palette.
-- **💾 Auto-Save & Resume:**
-  - Deterministic JSON game state serialization saved on every roll and hop.
-  - Instant match restoration banner on app launch.
-- **📳 Tactile Haptic Feedback:** Native vibration patterns for dice rolling, token hops, captures, and victory.
-- **🖥️ Responsive Scaling:** 1:1 board aspect ratio adapts across mobile phones and tablets framed by 4 corner player status badges.
+An offline 2D Ludo game for 2–4 players (any mix of humans and bots) built with Flutter. Game rules live in a pure, stateless Dart engine; a BLoC owns the match state; the board is drawn with `CustomPainter`. No network access is used.
 
 ---
 
-## 🏗️ Architecture & Directory Structure
+## 🌟 Features
 
-Built following Clean Architecture principles, completely decoupling pure game math and state from UI rendering.
+- **🎲 Board & rules**
+  - 15×15 board: 52-tile common track, 4 yards, 4 five-tile home columns, and a center goal.
+  - 8 safe squares (4 start squares + 4 stars) where tokens coexist without capture.
+  - Exact roll required to reach home; landing on an opponent on a non-safe square sends it back to its yard.
+  - Extra roll for a 6, a capture, or a token reaching home.
+  - Too many consecutive 6s (3 by default) forfeits the turn.
+  - If a roll has no legal move, the turn passes automatically.
+- **🎮 Game modes** (chosen in Match Settings)
+  - **Classic:** all 4 tokens home to win.
+  - **Quick:** first token home wins; each player starts with 1 token already on the board.
+  - **Rush:** first 2 tokens home win.
+  - Optional rules: *Must capture before home* and *Unlock with 1 or 6*.
+- **🤖 Bots** with three difficulty levels (Easy, Medium, Grandmaster). Moves are scored by heuristics:
+  - Medium weights: capture `+100`, landing on a safe square `+60`, reaching home `+50`, escaping a threat `+40`, leaving the yard `+20`, plus a small bonus for advancing tokens further along.
+  - Easy picks a random move 40% of the time.
+  - Grandmaster raises the weights and penalizes moving into an opponent's reach.
+  - Bots "think" for 600–900 ms before rolling and 450–750 ms before moving.
+- **↩️ Undo & move history**
+  - Undo returns to the most recent point where a human had more than one token to choose from, **with the same dice** (no re-rolling), undoing any bot turns since. Press again to step further back.
+  - The history sheet logs every roll: moves, captures (with the victim), tokens reaching home, rolls with no legal move, and sixes penalties.
+- **💾 Autosave & resume**
+  - The match, its history, and the last 10 undo points are saved after every roll and move, via `shared_preferences`.
+  - On launch, an unfinished match is offered in a *Previous match found* banner. Until you resume or dismiss it, the new game isn't saved, so the old match can't be overwritten.
+- **🎨 Board themes:** Dark Modern, Classic Wood, Cyber Neon, Royal Marble.
+- **🎬 Presentation:** full-screen tumbling dice overlay for human rolls, inline rolls for bots, hop-by-hop pawn animation with path previews, and confetti on victory.
+- **📳 Haptics** for dice rolls, pawn hops, and victory (toggle in the app bar).
+
+The app starts a 4-player Classic match with all seats human. Use **Settings** to choose players, bots, mode, difficulty, rules, and theme.
+
+---
+
+## 🏗️ Architecture
+
+```
+UI (screen, widgets) ──events──▶ LudoBloc ──▶ use cases ──▶ LudoEngine (pure rules)
+        ▲                          │                    └──▶ repository ──▶ shared_preferences
+        └─────────state────────────┘
+```
+
+- **`LudoEngine`** is pure and stateless: `rollDice(state, roll)`, `executeMove(state, move)`, and so on take a `GameState` and return the next one. It has no randomness (dice values are passed in) and never plays a move on its own.
+- **`LudoBloc`** owns the match. `LudoActiveState.gameState` is the only copy of the game, alongside the move history, undo points, and UI state such as the in-flight dice roll and pawn animation.
+  - Events are processed strictly one at a time.
+  - Bot thinking and other delays are timers owned by the BLoC. They are cancelled when a different match takes over, so stale bot actions can't leak into a new or resumed game.
+- **Use cases** wrap the engine and the repository and return `Either<Failure, T>` (fpdart). `RollDiceUseCase` holds the dice `Random`.
+- **Dependency injection** is done with `get_it` in `bootstrap.dart`.
+
+### Directory structure
 
 ```
 lib/
+├── main.dart                        # Entry point: bootstrap() then runApp
+├── bootstrap.dart                   # DI registration, portrait lock, shared_preferences
+├── app/
+│   ├── app.dart                     # MaterialApp + BlocProvider
+│   └── theme/app_theme.dart         # Global dark Material theme
 ├── core/
 │   ├── coordinates/
-│   │   ├── board_coordinate.dart      # 15x15 coordinate definition
-│   │   └── board_path_registry.dart   # Graph paths, safe zones, yard slots
-│   ├── services/
-│   │   ├── game_storage_service.dart  # Offline JSON match state persistence
-│   │   └── haptics_service.dart       # Native Android haptic feedback
-│   └── theme/
-│       └── board_theme.dart           # Dark Modern, Wooden, and Neon themes
-│
-├── models/
-│   ├── board_theme_type.dart          # Visual theme enum
-│   ├── game_rules.dart                # Rules & victory conditions
-│   ├── game_state.dart                # Immutable root state with JSON serialization
-│   ├── move.dart                      # Hop trajectory & move mechanics
-│   ├── pawn.dart                      # Pawn state (yard, track, home run, home)
-│   ├── pawn_position.dart             # Sealed coordinate position hierarchy
-│   ├── player.dart                    # Player metadata & pawn collections
-│   └── player_color.dart              # Red, Green, Yellow, Blue definitions
-│
+│   │   ├── board_coordinate.dart    # 15×15 grid coordinate
+│   │   └── board_path_registry.dart # Track, home columns, yards, safe squares, step→cell mapping
+│   ├── errors/failures.dart         # Failure types used by Either results
+│   └── services/haptics_service.dart
 ├── engine/
-│   ├── ludo_game_controller.dart      # Pure Dart state machine & rule engine
-│   └── ludo_ai_engine.dart            # Heuristic bot decision engine
-│
-├── presentation/
-│   ├── painters/
-│   │   ├── ludo_board_painter.dart    # 15x15 vector board renderer
-│   │   └── pawn_painter.dart          # 3D token renderer with selection bounce
-│   ├── screens/
-│   │   └── ludo_game_screen.dart      # Main game scaffold & orchestration
-│   └── widgets/
-│       ├── badges/
-│       │   └── player_badge_widget.dart   # 4 corner player status chips
-│       ├── confetti/
-│       │   └── confetti_overlay.dart      # Zero-dep particle victory fanfare
-│       ├── dialogs/
-│       │   └── game_setup_dialog.dart     # Rules, AI config, & theme selector
-│       └── dice/
-│           ├── animated_dice_widget.dart          # Shared HUD dice widget
-│           └── full_screen_dice_roll_overlay.dart # 3D tumbling roll overlay
-│
-└── main.dart                          # App entry point & global M3 theme
+│   ├── ludo_game_engine.dart        # Pure rules engine (state in → state out)
+│   ├── ludo_engine.dart             # Barrel export of the engine and models
+│   └── ai/ludo_ai_engine.dart       # Bot move scoring and thinking delays
+├── models/
+│   ├── game_state.dart              # Immutable match state + JSON
+│   ├── game_config.dart             # Game modes (Classic/Quick/Rush), timer config
+│   ├── game_rules.dart              # Rule options, win conditions, AI difficulty
+│   ├── player.dart, token.dart      # Players and their 4 tokens
+│   ├── player_color.dart            # Colors, start squares, palette
+│   ├── board_position.dart          # Sealed token position (base/track/home column/goal)
+│   ├── move.dart                    # A legal move and its hop trajectory
+│   ├── history_entry.dart           # One resolved roll in the move history
+│   ├── saved_match.dart             # Persisted match: game + history + undo points
+│   └── pawn.dart, pawn_position.dart  # Legacy aliases for Token / BoardPosition
+├── features/ludo/
+│   ├── data/
+│   │   ├── datasources/ludo_local_data_source.dart  # shared_preferences JSON storage
+│   │   └── repositories/ludo_repository_impl.dart
+│   ├── domain/
+│   │   ├── repositories/ludo_repository.dart
+│   │   └── usecases/                # roll dice, execute move, get/save/clear saved match
+│   └── presentation/
+│       ├── bloc/                    # LudoBloc, events, states
+│       └── screens/ludo_game_screen.dart
+└── presentation/
+    ├── screens/ludo_game_screen.dart  # Re-export of the feature screen
+    ├── themes/board_theme.dart        # The four board themes
+    └── widgets/
+        ├── board/                   # Board painter, board widget, pawn widget
+        ├── dialogs/game_setup_dialog.dart
+        ├── dice/                    # HUD dice and full-screen roll overlay
+        ├── effects/confetti_overlay.dart
+        └── hud/                     # Player badges, move history sheet
 ```
+
+### Saved-game format
+
+The autosave is a single JSON value under the `shared_preferences` key `ludo_autosave_v1`. The key name predates the current format. Its contents are a `SavedMatch` (format version 2):
+
+- The game state.
+- The full move history. Moves are stored without their animation paths.
+- The 10 most recent undo points. The BLoC keeps up to 50 in memory.
+
+Version 1 saves (a bare `GameState`) still load, with empty history. Saves from a newer format version are rejected rather than misread.
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (v3.19+ recommended)
-- Android Studio / VS Code with Dart & Flutter extensions
-- Android device or emulator (Android 7.0+ / API 24+)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) with Dart `^3.13.5` (see `pubspec.yaml`).
+- Android (minimum SDK is Flutter's default) or iOS 15.0+. Platform folders also exist for web, macOS, Windows, and Linux.
 
-### Installation & Run
+### Dependencies
 
-1. Clone or navigate to the repository:
-   ```bash
-   cd /Users/keshav/StudioProjects/ludo
-   ```
+| Package | Used for |
+|---|---|
+| `flutter_bloc` | State management |
+| `get_it` | Dependency injection |
+| `fpdart` | `Either` results from use cases |
+| `shared_preferences` | Autosave storage |
+| `bloc_test` (dev) | BLoC tests |
+| `flutter_lints` (dev) | Lint rules |
 
-2. Verify dependencies (no external pub packages needed):
-   ```bash
-   flutter pub get
-   ```
+`cupertino_icons` and `mocktail` are declared in `pubspec.yaml` but not currently used.
 
-3. Run the application:
-   ```bash
-   flutter run
-   ```
+### Run
+
+```bash
+flutter pub get
+flutter run
+```
 
 ---
 
 ## 🧪 Testing
 
-The codebase includes comprehensive unit tests verifying coordinate graph mappings, rule enforcement, win conditions, and JSON state persistence.
-
-Run all tests:
 ```bash
-flutter test
+flutter test      # all tests
+flutter analyze   # static analysis
 ```
 
-Run static analysis:
-```bash
-flutter analyze
-```
+| File | Covers |
+|---|---|
+| `test/ludo_engine_test.dart` | Board topology, rules (captures, safe squares, exact home, sixes, mandatory capture), game modes, serialization, AI scoring |
+| `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume |
+| `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1 compatibility, history and undo persistence |
+| `test/widget_test.dart` | Screen loads, dice overlay, undo button and history sheet |
+
+Test helpers:
+- `test/helpers/ludo_game_controller.dart` is a small stateful wrapper over the pure engine, used by the engine tests.
+- `test/helpers/in_memory_local_data_source.dart` replaces real storage.
+
+Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. Inside `testWidgets`' fake-async zone, real platform channels and storage never complete.
 
 ---
 
-## 📦 Building Android APK
+## 🚧 Known gaps
 
-Build a debug APK:
-```bash
-flutter build apk --debug
-```
-
-Build an optimized release APK:
-```bash
-flutter build apk --release
-```
-
-The compiled binary will be generated at:
-`build/app/outputs/flutter-apk/app-release.apk`
+- **Game speed has no control in the UI.** The engine and BLoC honor `GameRules.gameSpeed`, scaling bot thinking, dice settling, and pawn hops, but the setup dialog doesn't expose it, so it's always 1×. The consecutive-sixes limit is likewise only configurable in code.
+- **The turn timer isn't used.** `TimerConfig` and `LudoEngine.handleTurnTimeout` (strikes and disconnects) exist and are tested, but nothing in the UI runs a turn timer.
+- **Some haptics never fire.** `HapticsService.capture()` and `tokenHome()` are defined but never called. The haptics on/off setting isn't saved.
+- **Unused and legacy code:** `player_station_widget.dart` is unused, and `pawn.dart`, `pawn_position.dart`, and `TurnPhase` are kept as legacy aliases.
+- **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
 
 ---
 
-## 📄 License
+## 📦 Building
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+```bash
+flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.apk
+flutter build ios --release
+flutter build web
+```

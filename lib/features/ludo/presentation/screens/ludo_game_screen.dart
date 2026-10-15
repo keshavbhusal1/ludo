@@ -13,6 +13,7 @@ import '../../../../presentation/widgets/dialogs/game_setup_dialog.dart';
 import '../../../../presentation/widgets/dice/animated_dice_widget.dart';
 import '../../../../presentation/widgets/dice/full_screen_dice_roll_overlay.dart';
 import '../../../../presentation/widgets/effects/confetti_overlay.dart';
+import '../../../../presentation/widgets/hud/move_history_sheet.dart';
 import '../../../../presentation/widgets/hud/player_badge_widget.dart';
 import '../bloc/ludo_bloc.dart';
 import '../bloc/ludo_event.dart';
@@ -96,11 +97,12 @@ class _LudoGameScreenState extends State<LudoGameScreen>
     );
   }
 
-  Future<void> _startPawnAnimation(Move move) async {
+  Future<void> _startPawnAnimation(Move move, double gameSpeed) async {
     _currentlyAnimatingMove = move;
     final int hopCount = max(1, move.trajectory.length - 1);
     final rawDuration = min(850, max(320, hopCount * 125));
-    _pawnHopController.duration = Duration(milliseconds: rawDuration);
+    _pawnHopController.duration =
+        Duration(milliseconds: (rawDuration / gameSpeed).round());
 
     HapticsService.pawnHop();
     await _pawnHopController.forward(from: 0.0);
@@ -183,7 +185,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
           // Handle pawn movement animation
           if (state.animatingMove != null &&
               state.animatingMove != _currentlyAnimatingMove) {
-            _startPawnAnimation(state.animatingMove!);
+            _startPawnAnimation(state.animatingMove!, state.gameState.rules.gameSpeed);
           }
         }
       },
@@ -236,6 +238,24 @@ class _LudoGameScreenState extends State<LudoGameScreen>
               ],
             ),
             actions: [
+              // Undo to last token choice
+              IconButton(
+                icon: Icon(
+                  Icons.undo,
+                  color: state.canUndo ? Colors.white : Colors.white24,
+                  size: 20,
+                ),
+                tooltip: 'Undo',
+                onPressed: state.canUndo
+                    ? () => context.read<LudoBloc>().add(const LudoUndoRequested())
+                    : null,
+              ),
+              // Move history
+              IconButton(
+                icon: const Icon(Icons.history, color: Colors.white, size: 20),
+                tooltip: 'Move history',
+                onPressed: () => MoveHistorySheet.show(context),
+              ),
               // Mute / Haptics Toggle
               IconButton(
                 icon: Icon(

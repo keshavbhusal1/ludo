@@ -1,6 +1,6 @@
 import 'package:fpdart/fpdart.dart';
 import '../../../../core/errors/failures.dart';
-import '../../../../models/game_state.dart';
+import '../../../../models/saved_match.dart';
 import '../../domain/repositories/ludo_repository.dart';
 import '../datasources/ludo_local_data_source.dart';
 
@@ -11,7 +11,7 @@ class LudoRepositoryImpl implements LudoRepository {
   const LudoRepositoryImpl({required this.localDataSource});
 
   @override
-  Future<Either<Failure, GameState?>> getSavedGame() async {
+  Future<Either<Failure, SavedMatch?>> getSavedGame() async {
     try {
       final game = await localDataSource.loadGame();
       return Right(game);
@@ -21,9 +21,9 @@ class LudoRepositoryImpl implements LudoRepository {
   }
 
   @override
-  Future<Either<Failure, void>> saveGame(GameState state) async {
+  Future<Either<Failure, void>> saveGame(SavedMatch match) async {
     try {
-      await localDataSource.saveGame(state);
+      await localDataSource.saveGame(match);
       return const Right(null);
     } catch (e) {
       return Left(StorageFailure('Failed to save game: $e'));

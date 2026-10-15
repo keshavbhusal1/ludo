@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ludo/engine/ai/ludo_ai_engine.dart';
 import 'package:ludo/engine/ludo_engine.dart';
 
+import 'helpers/ludo_game_controller.dart';
+
 void main() {
   group('1. Board Topology & Coordinates (15x15 Grid & 52-Tile Track)', () {
     test('Common track has exactly 52 sequential coordinates within 15x15 bounds', () {

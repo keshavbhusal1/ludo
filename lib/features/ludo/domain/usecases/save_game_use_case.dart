@@ -1,6 +1,6 @@
 import 'package:fpdart/fpdart.dart';
 import '../../../../core/errors/failures.dart';
-import '../../../../models/game_state.dart';
+import '../../../../models/saved_match.dart';
 import '../repositories/ludo_repository.dart';
 
 /// Use case to persist the current active match state.
@@ -9,5 +9,5 @@ class SaveGameUseCase {
 
   SaveGameUseCase(this.repository);
 
-  Future<Either<Failure, void>> call(GameState state) => repository.saveGame(state);
+  Future<Either<Failure, void>> call(SavedMatch match) => repository.saveGame(match);
 }
