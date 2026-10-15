@@ -361,7 +361,8 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     LudoSideEffect? sideEffect;
     if (_hitSixesLimit(stateBeforeRoll, rolled)) {
       sideEffect = LudoSnackbarEffect(
-        'Three 6s penalty! Turn passes to ${gameState.activePlayer.name}',
+        '${_countWord(stateBeforeRoll.config.consecutiveSixesLimit)} 6s penalty! '
+        'Turn passes to ${gameState.activePlayer.name}',
         icon: Icons.warning_amber_rounded,
         iconColor: const Color(0xFFF87171),
       );
@@ -569,8 +570,14 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     return next.length > _maxUndoPoints ? next.sublist(next.length - _maxUndoPoints) : next;
   }
 
-  static bool _hitSixesLimit(GameState before, int roll) =>
-      roll == 6 && before.consecutiveSixes + 1 >= before.config.consecutiveSixesLimit;
+  static bool _hitSixesLimit(GameState before, int roll) {
+    final limit = before.config.consecutiveSixesLimit;
+    return limit > 0 && roll == 6 && before.consecutiveSixes + 1 >= limit;
+  }
+
+  /// "Two", "Three", ... for small counts in messages; digits otherwise.
+  static String _countWord(int n) =>
+      const {2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six'}[n] ?? '$n';
 
   /// Logs a roll that ended the turn without a move. Rolls that lead to a
   /// move are logged when the move is played.

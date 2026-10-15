@@ -37,6 +37,9 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   /// Timeouts before a bot takes over the seat; 0 means never.
   static const List<int> _maxStrikeOptions = [1, 3, 5, 0];
 
+  /// Sixes in a row that forfeit the turn; 0 means no limit.
+  static const List<int> _sixesLimitOptions = [2, 3, 4, 0];
+
   int _playerCount = 4;
   final Map<PlayerColor, bool> _aiMap = {
     PlayerColor.red: false,
@@ -53,6 +56,7 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   bool _turnTimer = false;
   int _turnSeconds = 12;
   int _maxStrikes = 3;
+  int _sixesLimit = 3;
 
   @override
   void initState() {
@@ -70,6 +74,7 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
       _turnTimer = config.rules.turnTimerEnabled;
       _turnSeconds = config.rules.turnTimeLimitSeconds;
       _maxStrikes = config.rules.turnTimerMaxStrikes;
+      _sixesLimit = config.rules.consecutiveSixesLimit;
     }
   }
 
@@ -111,12 +116,12 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
     );
   }
 
-  /// Standard strike choices in display order (Never last), plus the current
-  /// value if it's non-standard so it stays selectable.
-  List<int> _strikeChoices() {
+  /// Count [options] in ascending order with "none" (0) last, plus [current]
+  /// if it's non-standard so it stays selectable.
+  static List<int> _countChoices(List<int> options, int current) {
     final counts = {
-      ..._maxStrikeOptions.where((n) => n > 0),
-      if (_maxStrikes > 0) _maxStrikes,
+      ...options.where((n) => n > 0),
+      if (current > 0) current,
     }.toList()
       ..sort();
     return [...counts, 0];
@@ -442,6 +447,23 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
                 activeTrackColor: const Color(0xFF3B82F6).withValues(alpha: 0.5),
                 onChanged: (val) => setState(() => _unlockOneOrSix = val),
               ),
+              const SizedBox(height: 6),
+              const Text(
+                'Sixes in a row before losing the turn',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                key: const Key('sixes-limit-options'),
+                children: _countChoices(_sixesLimitOptions, _sixesLimit)
+                    .map((n) => _optionChip(
+                          label: n == 0 ? 'Off' : '$n',
+                          selected: _sixesLimit == n,
+                          onTap: () => setState(() => _sixesLimit = n),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 6),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
@@ -476,7 +498,8 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
                 ),
                 const SizedBox(height: 6),
                 Row(
-                  children: _strikeChoices()
+                  key: const Key('strike-limit-options'),
+                  children: _countChoices(_maxStrikeOptions, _maxStrikes)
                       .map((n) => _optionChip(
                             label: n == 0 ? 'Never' : '$n',
                             selected: _maxStrikes == n,
@@ -506,9 +529,7 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               turnTimerEnabled: _turnTimer,
               turnTimeLimitSeconds: _turnSeconds,
               turnTimerMaxStrikes: _maxStrikes,
-              // Not editable here; keep the current match's value
-              consecutiveSixesLimit:
-                  widget.initialConfig?.rules.consecutiveSixesLimit ?? 3,
+              consecutiveSixesLimit: _sixesLimit,
             ),
             themeType: _themeType,
           );

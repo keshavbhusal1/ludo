@@ -5,8 +5,14 @@ import 'package:ludo/models/player_color.dart';
 import 'package:ludo/presentation/themes/board_theme.dart';
 import 'package:ludo/presentation/widgets/dialogs/game_setup_dialog.dart';
 
+/// A chip's label inside the option row with [rowKey] (several rows share labels like '3').
+Finder chip(String rowKey, String label) =>
+    find.descendant(of: find.byKey(Key(rowKey)), matching: find.text(label));
+
+Color? colorOf(WidgetTester tester, Finder finder) => tester.widget<Text>(finder).style?.color;
+
 void main() {
-  testWidgets('game speed is preselected, changeable, and returned with the rules',
+  testWidgets('game speed, timer, and sixes settings are preselected, changeable, and returned',
       (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
@@ -69,13 +75,25 @@ void main() {
 
     expect(find.text('Timeouts before a bot takes over'), findsOneWidget);
     for (final label in ['1', '3', '5', 'Never']) {
-      expect(find.text(label), findsOneWidget);
+      expect(chip('strike-limit-options', label), findsOneWidget);
     }
-    expect(tester.widget<Text>(find.text('3')).style?.color, Colors.white,
+    expect(colorOf(tester, chip('strike-limit-options', '3')), Colors.white,
         reason: 'default strike limit preselected');
-    await tester.ensureVisible(find.text('Never'));
-    await tester.tap(find.text('Never'));
+    await tester.ensureVisible(chip('strike-limit-options', 'Never'));
+    await tester.tap(chip('strike-limit-options', 'Never'));
     await tester.pump();
+
+    // Sixes limit: always shown; the match's current value (2) is preselected
+    expect(find.text('Sixes in a row before losing the turn'), findsOneWidget);
+    for (final label in ['2', '3', '4', 'Off']) {
+      expect(chip('sixes-limit-options', label), findsOneWidget);
+    }
+    expect(colorOf(tester, chip('sixes-limit-options', '2')), Colors.white);
+    await tester.ensureVisible(chip('sixes-limit-options', '4'));
+    await tester.tap(chip('sixes-limit-options', '4'));
+    await tester.pump();
+    expect(colorOf(tester, chip('sixes-limit-options', '4')), Colors.white);
+    expect(colorOf(tester, chip('sixes-limit-options', '2')), isNot(Colors.white));
 
     await tester.ensureVisible(find.text('APPLY & START MATCH'));
     await tester.tap(find.text('APPLY & START MATCH'));
@@ -85,11 +103,10 @@ void main() {
     expect(result?.rules.turnTimerEnabled, isTrue);
     expect(result?.rules.turnTimeLimitSeconds, 20);
     expect(result?.rules.turnTimerMaxStrikes, 0, reason: 'Never');
-    expect(result?.rules.consecutiveSixesLimit, 2,
-        reason: 'settings the dialog does not show must be kept, not reset');
+    expect(result?.rules.consecutiveSixesLimit, 4);
   });
 
-  testWidgets('existing timer settings are preselected, even non-standard ones', (tester) async {
+  testWidgets('existing timer and sixes settings are preselected, even non-standard ones', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -105,6 +122,7 @@ void main() {
               turnTimerEnabled: true,
               turnTimeLimitSeconds: 45,
               turnTimerMaxStrikes: 4,
+              consecutiveSixesLimit: 5,
             ),
             themeType: BoardThemeType.darkModern,
           ),
@@ -117,8 +135,12 @@ void main() {
     expect(tester.widget<Text>(find.text('45 s')).style?.color, Colors.white);
     expect(find.text('30 s'), findsOneWidget, reason: 'standard options still offered');
 
-    await tester.ensureVisible(find.text('4'));
-    expect(tester.widget<Text>(find.text('4')).style?.color, Colors.white);
-    expect(find.text('Never'), findsOneWidget);
+    await tester.ensureVisible(chip('strike-limit-options', '4'));
+    expect(colorOf(tester, chip('strike-limit-options', '4')), Colors.white);
+    expect(chip('strike-limit-options', 'Never'), findsOneWidget);
+
+    await tester.ensureVisible(chip('sixes-limit-options', '5'));
+    expect(colorOf(tester, chip('sixes-limit-options', '5')), Colors.white);
+    expect(chip('sixes-limit-options', 'Off'), findsOneWidget);
   });
 }

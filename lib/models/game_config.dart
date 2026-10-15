@@ -165,6 +165,8 @@ class RushMode extends GameMode {
 class GameConfig {
   final GameMode mode;
   final TimerConfig timerConfig;
+
+  /// Rolling this many sixes in a row forfeits the turn; 0 means no limit.
   final int consecutiveSixesLimit;
   final bool unlockYardOnOneOrSix;
   final double gameSpeed;

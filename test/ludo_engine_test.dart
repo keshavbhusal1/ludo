@@ -488,6 +488,22 @@ void main() {
       expect(state.validMoves.every((m) => m.isYardExit), isTrue);
     });
 
+    test('a sixes limit of 0 means no limit: sixes keep the turn indefinitely', () {
+      final controller = LudoGameController.newGame(
+        colors: [PlayerColor.red, PlayerColor.green],
+        rules: const GameRules(consecutiveSixesLimit: 0),
+        autoExecuteSingleMove: false,
+      );
+      var state = controller.state;
+      for (var i = 1; i <= 6; i++) {
+        state = controller.rollDice(6);
+        expect(state.activePlayerColor, PlayerColor.red, reason: 'six #$i keeps the turn');
+        expect(state.consecutiveSixesCount, i);
+        state = controller.executeMove(state.validMoves.first);
+      }
+      expect(controller.state.rules.consecutiveSixesLimit, 0);
+    });
+
     test('startNewGame honours rules and the custom sixes limit is enforced', () {
       final controller = LudoGameController.newGame(
         colors: [PlayerColor.red, PlayerColor.green],

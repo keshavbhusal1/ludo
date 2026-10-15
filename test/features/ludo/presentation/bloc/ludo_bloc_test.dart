@@ -1063,6 +1063,54 @@ void main() {
     );
 
     blocTest<LudoBloc, LudoState>(
+      'the penalty message follows the configured limit',
+      build: () => buildBlocWithRoll(
+        6,
+        redIsAi: false,
+        edit: (s) => s.copyWith(
+          config: s.config.copyWith(consecutiveSixesLimit: 2),
+          consecutiveSixesCount: 1,
+        ),
+      ),
+      act: (bloc) async {
+        bloc.add(const LudoDiceRollRequested());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const LudoDiceRollOverlayCompleted());
+      },
+      wait: const Duration(milliseconds: 50),
+      verify: (bloc) {
+        final s = bloc.state as LudoActiveState;
+        expect((s.sideEffect as LudoSnackbarEffect).message, startsWith('Two 6s penalty!'));
+        expect(s.gameState.activePlayerColor, PlayerColor.green);
+      },
+    );
+
+    blocTest<LudoBloc, LudoState>(
+      'with no sixes limit, a sixth six in a row is no penalty',
+      build: () => buildBlocWithRoll(
+        6,
+        redIsAi: false,
+        edit: (s) => s.copyWith(
+          config: s.config.copyWith(consecutiveSixesLimit: 0),
+          consecutiveSixesCount: 5,
+        ),
+      ),
+      act: (bloc) async {
+        bloc.add(const LudoDiceRollRequested());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const LudoDiceRollOverlayCompleted());
+      },
+      wait: const Duration(milliseconds: 50),
+      verify: (bloc) {
+        final s = bloc.state as LudoActiveState;
+        expect(s.sideEffect, isNot(isA<LudoSnackbarEffect>()));
+        expect(s.gameState.activePlayerColor, PlayerColor.red);
+        expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+        expect(s.history, isEmpty, reason: 'no penalty entry');
+      },
+    );
+
+    blocTest<LudoBloc, LudoState>(
       'third consecutive six shows the penalty snackbar',
       build: () => buildBlocWithRoll(
         6,

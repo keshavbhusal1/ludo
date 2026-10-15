@@ -49,7 +49,7 @@ class GameRules {
   /// If true, rolling either a 1 or a 6 can unlock a pawn from the yard.
   final bool unlockYardOnOneOrSix;
 
-  /// Maximum consecutive sixes allowed before forfeiting the turn.
+  /// Rolling this many sixes in a row forfeits the turn; 0 means no limit.
   final int consecutiveSixesLimit;
 
   /// Movement animation and bot thinking speed multiplier (1.0, 1.5, 2.0).
@@ -76,7 +76,8 @@ class GameRules {
     this.turnTimeLimitSeconds = 12,
     this.turnTimerMaxStrikes = 3,
   })  : assert(turnTimeLimitSeconds > 0, 'Turn time limit must be positive'),
-        assert(turnTimerMaxStrikes >= 0, 'Strike limit must be 0 (never) or more');
+        assert(turnTimerMaxStrikes >= 0, 'Strike limit must be 0 (never) or more'),
+        assert(consecutiveSixesLimit >= 0, 'Sixes limit must be 0 (none) or more');
 
   /// Converts GameRules to GameConfig.
   dynamic toGameConfig() {

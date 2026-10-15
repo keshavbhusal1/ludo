@@ -13,7 +13,7 @@ import '../models/player_color.dart';
 /// returns the next one. Callers own the state and supply dice values.
 ///
 /// FSM: waitingForRoll -> waitingForSelection -> (executeMove) -> waitingForRoll ... -> gameOver
-/// - 3-consecutive-sixes forfeiture (limit configurable)
+/// - Consecutive-sixes forfeiture (3 by default; configurable or off)
 /// - Extra rolls for rolling 6, capturing an opponent, or reaching Home
 /// - Optional mandatory kill before entering the home column
 /// - Safe tile coexistence on [1, 9, 14, 22, 27, 35, 40, 48]
@@ -57,8 +57,9 @@ class LudoEngine {
     final isSix = roll == 6;
     final newConsecutiveSixes = isSix ? state.consecutiveSixesCount + 1 : 0;
 
-    // RULE: hitting the consecutive-sixes limit forfeits the turn immediately
-    if (newConsecutiveSixes >= state.config.consecutiveSixesLimit) {
+    // RULE: hitting the consecutive-sixes limit (if any) forfeits the turn immediately
+    final sixesLimit = state.config.consecutiveSixesLimit;
+    if (sixesLimit > 0 && newConsecutiveSixes >= sixesLimit) {
       return state.copyWith(
         lastDiceRoll: roll,
         consecutiveSixesCount: 0,
