@@ -3,19 +3,31 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// Seconds left until [deadline], shown as a small timer chip that turns red
-/// for the last few seconds.
+/// for the last third of the turn.
 class TurnCountdown extends StatefulWidget {
   final DateTime deadline;
+
+  /// The turn's full length, which sets when the warning starts.
+  final Duration limit;
   final Color color;
 
-  const TurnCountdown({super.key, required this.deadline, required this.color});
+  const TurnCountdown({
+    super.key,
+    required this.deadline,
+    required this.limit,
+    required this.color,
+  });
+
+  /// Seconds left at which the chip turns red: the last third of [limit],
+  /// rounded, and at least 1 (12 s -> 4 s, 8 s -> 3 s, 30 s -> 10 s).
+  static int warnFromSeconds(Duration limit) =>
+      (limit.inMilliseconds / 3000).round().clamp(1, 1 << 20);
 
   @override
   State<TurnCountdown> createState() => _TurnCountdownState();
 }
 
 class _TurnCountdownState extends State<TurnCountdown> {
-  static const _warnBelowSeconds = 4;
   late final Timer _ticker;
 
   @override
@@ -34,7 +46,8 @@ class _TurnCountdownState extends State<TurnCountdown> {
   Widget build(BuildContext context) {
     final remaining = widget.deadline.difference(DateTime.now());
     final seconds = (remaining.inMilliseconds / 1000).ceil().clamp(0, 999);
-    final color = seconds <= _warnBelowSeconds ? const Color(0xFFF87171) : widget.color;
+    final warning = seconds <= TurnCountdown.warnFromSeconds(widget.limit);
+    final color = warning ? const Color(0xFFF87171) : widget.color;
 
     return Semantics(
       label: '$seconds seconds left in this turn',

@@ -511,6 +511,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                         const SizedBox(width: 8),
                                         TurnCountdown(
                                           deadline: state.turnDeadline!,
+                                          limit: gameState.config.timerConfig.turnTimeout,
                                           color: primaryColor,
                                         ),
                                       ],
