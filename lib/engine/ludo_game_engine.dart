@@ -363,6 +363,27 @@ class LudoEngine {
     );
   }
 
+  /// [target] with every player's turn-timer standing — strikes, and whether
+  /// a bot has taken the seat — copied from [current]. Undo uses this so
+  /// timeouts (and reclaimed seats) aren't rewound with the board.
+  ///
+  /// Returns [target] itself when nothing differs.
+  GameState withTimerStandingFrom(GameState target, GameState current) {
+    var changed = false;
+    final players = <Player>[];
+    for (final p in target.players) {
+      final now = current.getPlayer(p.color);
+      if (now != null &&
+          (now.strikes != p.strikes || now.isDisconnected != p.isDisconnected)) {
+        changed = true;
+        players.add(p.copyWith(strikes: now.strikes, isDisconnected: now.isDisconnected));
+      } else {
+        players.add(p);
+      }
+    }
+    return changed ? target.copyWith(players: players) : target;
+  }
+
   /// Next player clockwise from the active one, skipping players who have finished.
   int _findNextActivePlayerIndex(GameState state, List<Player> players) {
     final requiredTokens = state.config.mode.tokensToWin;

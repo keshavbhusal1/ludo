@@ -397,6 +397,38 @@ void main() {
     });
   });
 
+  group('Undo keeps turn-timer standing', () {
+    const engine = LudoEngine();
+
+    test('copies strikes and bot takeovers from now onto the earlier board', () {
+      final earlier = engine.newGame(colors: [PlayerColor.red, PlayerColor.green]);
+      final moved = engine.executeMove(engine.rollDice(earlier, 6), engine.rollDice(earlier, 6).validMoves.first);
+      final now = moved.copyWith(players: [
+        moved.players[0].copyWith(strikes: 1),
+        moved.players[1].copyWith(strikes: 3, isDisconnected: true),
+      ]);
+
+      final restored = engine.withTimerStandingFrom(earlier, now);
+      expect(restored.players[0].strikes, 1);
+      expect(restored.players[1].isBotControlled, isTrue);
+      // The board itself is the earlier one
+      expect(restored.players[0].tokens.every((t) => t.isInBase), isTrue);
+      expect(restored.activePlayerColor, earlier.activePlayerColor);
+    });
+
+    test('a reclaimed seat stays human; nothing to change returns the same state', () {
+      final earlier = engine.newGame(colors: [PlayerColor.red, PlayerColor.green]).copyWith(
+        players: [
+          Player.initial(color: PlayerColor.red).copyWith(strikes: 3, isDisconnected: true),
+          Player.initial(color: PlayerColor.green),
+        ],
+      );
+      final reclaimed = engine.reclaimSeat(earlier, PlayerColor.red);
+      expect(engine.withTimerStandingFrom(earlier, reclaimed).players[0].isBotControlled, isFalse);
+      expect(identical(engine.withTimerStandingFrom(earlier, earlier), earlier), isTrue);
+    });
+  });
+
   group('Rules from setup dialog reach the engine config', () {
     test('strike limit maps to the timer: 1 takes over at once, 0 never does', () {
       const engine = LudoEngine();

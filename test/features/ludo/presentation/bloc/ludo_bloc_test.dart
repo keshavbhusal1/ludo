@@ -436,6 +436,39 @@ void main() {
       await bloc.close();
     });
 
+    test('a timeout strike is not undone', () async {
+      // Both human, 300 ms timer: margins for red's quick pick and the undo
+      final game = twoRedTokensOut(engine.newGame(
+        colors: const [PlayerColor.red, PlayerColor.green],
+        aiConfig: const {PlayerColor.red: false, PlayerColor.green: false},
+        config: const GameConfig(
+          timerConfig: TimerConfig(enabled: true, turnTimeout: Duration(milliseconds: 300)),
+        ),
+      ));
+      final bloc = timedBloc(game);
+      bloc.add(const LudoDiceRollRequested());
+      await wait(20);
+      bloc.add(const LudoDiceRollOverlayCompleted()); // red's choice: undo point
+      await wait(20);
+      final move = stateOf(bloc).gameState.validMoves.first;
+      bloc.add(LudoMoveSelected(move));
+      await wait(10);
+      bloc.add(LudoMoveAnimationCompleted(move));
+
+      await wait(420); // green times out (~300 ms): strike, auto-roll, turn passes
+      expect(stateOf(bloc).gameState.players[1].strikes, 1);
+      expect(stateOf(bloc).gameState.activePlayerColor, PlayerColor.red);
+
+      bloc.add(const LudoUndoRequested());
+      await wait(20);
+      final s = stateOf(bloc);
+      expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection, reason: "back at red's choice");
+      expect(s.gameState.players[1].strikes, 1, reason: "green's strike stands");
+      expect(identical(s.undoStack.last.state, s.gameState), isTrue);
+      expect(s.canUndo, isFalse, reason: 'already at the only choice point');
+      await bloc.close();
+    });
+
     /// Red's seat was taken over by a bot after 3 timeouts.
     GameState redTakenOver(GameState g) {
       final red = g.players[0].copyWith(strikes: 3, isDisconnected: true);
@@ -722,6 +755,32 @@ void main() {
       expect(resumed.undoStack, hasLength(1));
       expect(resumed.canUndo, isFalse);
       await second.close();
+    });
+
+    test('undoing to a choice for a seat a bot has since taken over lets the bot choose', () async {
+      final bloc = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+      await humanRoll(bloc); // red's choice: undo point
+      await play(bloc, 'red_0');
+      await humanRoll(bloc); // green passes back to red
+
+      // Red's seat is taken over after the undo point
+      final now = stateOf(bloc);
+      bloc.emit(now.copyWith(
+        gameState: now.gameState.copyWith(players: [
+          now.gameState.players[0].copyWith(strikes: 3, isDisconnected: true),
+          now.gameState.players[1],
+        ]),
+      ));
+
+      bloc.add(const LudoUndoRequested());
+      await settle();
+      expect(stateOf(bloc).gameState.players[0].isBotControlled, isTrue);
+      expect((stateOf(bloc).sideEffect as LudoSnackbarEffect).message,
+          'Undone — a bot is choosing for Red');
+
+      await Future<void>.delayed(const Duration(milliseconds: 900)); // bot thinks 450-750 ms
+      expect(stateOf(bloc).animatingMove, isNotNull, reason: 'the bot picked a token');
+      await bloc.close();
     });
 
     test('history logs captures with the victim and sixes penalties', () async {

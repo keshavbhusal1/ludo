@@ -25,6 +25,7 @@ An offline 2D Ludo game for 2–4 players (any mix of humans and bots) built wit
   - Bots "think" for 600–900 ms before rolling and 450–750 ms before moving.
 - **↩️ Undo & move history**
   - Undo returns to the most recent point where a human had more than one token to choose from, **with the same dice** (no re-rolling), undoing any bot turns since. Press again to step further back.
+  - Turn-timer penalties aren't undone: strikes, seats taken over by a bot, and reclaimed seats stay as they are. If undo lands on a choice for a seat a bot now plays, the bot makes it.
   - The history sheet logs every roll: moves, captures (with the victim), tokens reaching home, rolls with no legal move, and sixes penalties.
 - **💾 Autosave & resume**
   - The match, its history, and the last 10 undo points are saved after every roll and move, via `shared_preferences`.
@@ -178,7 +179,6 @@ Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. I
 ## 🚧 Known gaps
 
 - **The consecutive-sixes limit has no UI control.** It's only configurable in code; the setup dialog keeps whatever value the current match has.
-- **Undo can undo strikes.** Undoing to a choice made before a timeout restores the strike count from that point.
 - **Unused and legacy code:** `player_station_widget.dart` is unused, and `pawn.dart`, `pawn_position.dart`, and `TurnPhase` are kept as legacy aliases.
 - **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
 

@@ -534,19 +534,31 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     final target = current.undoTarget!;
 
     _cancelScheduled();
+    // Timeouts aren't undone: strikes and bot-taken seats stay as they are now.
+    final restored = engine.withTimerStandingFrom(target.state, current.gameState);
+
     // Points after the target belong to the undone timeline. The target stays,
-    // so after choosing again the player can come back to it.
+    // so after choosing again the player can come back to it; it's updated to
+    // the restored state because undo recognizes "already here" by identity.
     final keep = current.undoStack.indexOf(target) + 1;
+    final undoStack = current.undoStack.sublist(0, keep);
+    undoStack[keep - 1] = UndoPoint(state: restored, historyLength: target.historyLength);
+
+    final chooser = restored.activePlayer;
     emit(current.copyWith(
-      gameState: target.state,
+      gameState: restored,
       history: current.history.sublist(0, target.historyLength),
-      undoStack: current.undoStack.sublist(0, keep),
+      undoStack: undoStack,
       sideEffect: LudoSnackbarEffect(
-        'Undone — ${target.state.activePlayer.name}, pick a token',
+        chooser.isBotControlled
+            ? "Undone — a bot is choosing for ${chooser.name}"
+            : 'Undone — ${chooser.name}, pick a token',
         icon: Icons.undo,
         iconColor: const Color(0xFF60A5FA),
       ),
     ));
+    // The seat may have been taken over since this choice was made
+    if (chooser.isBotControlled) add(const LudoAiTurnTriggered());
     await _autosave();
   }
 
