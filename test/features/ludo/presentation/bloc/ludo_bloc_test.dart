@@ -253,6 +253,9 @@ void main() {
 
     /// Snackbar messages in emission order, as the screen's listener sees them.
     late List<String> snackbars;
+
+    /// The store the latest [timedBloc] saves to.
+    late InMemoryLocalDataSource store;
     const timeout = Duration(milliseconds: 150);
 
     Future<void> wait(int ms) => Future<void>.delayed(Duration(milliseconds: ms));
@@ -270,7 +273,8 @@ void main() {
 
     LudoBloc timedBloc(GameState game, {int roll = 3}) {
       rolls = _CountingRollDice(engine, random: _FixedRandom(roll));
-      final repo = LudoRepositoryImpl(localDataSource: InMemoryLocalDataSource());
+      store = InMemoryLocalDataSource();
+      final repo = LudoRepositoryImpl(localDataSource: store);
       final bloc = LudoBloc(
         rollDiceUseCase: rolls,
         executeMoveUseCase: ExecuteMoveUseCase(engine),
@@ -398,6 +402,86 @@ void main() {
       final deadline = stateOf(bloc).turnDeadline;
       expect(deadline, isNotNull);
       expect(deadline!.difference(DateTime.now()).inMilliseconds, greaterThan(100));
+      await bloc.close();
+    });
+
+    /// Red's seat was taken over by a bot after 3 timeouts.
+    GameState redTakenOver(GameState g) {
+      final red = g.players[0].copyWith(strikes: 3, isDisconnected: true);
+      return g.copyWith(players: [red, g.players[1]]);
+    }
+
+    test('reclaiming on your turn cancels the thinking bot; you roll yourself', () async {
+      final bloc = timedBloc(timedGame((g) => redTakenOver(oneRedTokenOut(g)), timerOn: false));
+      bloc.add(const LudoAiTurnTriggered()); // bot starts thinking (600-900 ms)
+      await wait(50);
+      bloc.add(const LudoSeatReclaimed(PlayerColor.red));
+      await wait(1000);
+
+      final red = stateOf(bloc).gameState.players[0];
+      expect(rolls.calls, 0, reason: "the bot's pending roll was cancelled");
+      expect(red.isBotControlled, isFalse);
+      expect(red.strikes, 0);
+      expect(stateOf(bloc).gameState.turnPhase, TurnPhase.awaitingRoll);
+      expect(snackbars, contains('Red is back in control'));
+      expect(store.saved?.game.players[0].isBotControlled, isFalse, reason: 'autosaved');
+      await bloc.close();
+    });
+
+    test('reclaiming while the bot is about to pick keeps the same roll for you', () async {
+      final bloc = timedBloc(timedGame(
+        (g) => engine.rollDice(redTakenOver(twoRedTokensOut(g)), 3),
+        timerOn: false,
+      ));
+      bloc.add(const LudoAiTurnTriggered()); // bot will pick in 450-750 ms
+      await wait(50);
+      bloc.add(const LudoSeatReclaimed(PlayerColor.red));
+      await wait(900);
+
+      final s = stateOf(bloc);
+      expect(s.animatingMove, isNull, reason: 'the bot did not move');
+      expect(s.gameState.turnPhase, TurnPhase.awaitingPawnSelection);
+      expect(s.gameState.lastDiceRoll, 3);
+      expect(s.gameState.validMoves, hasLength(2));
+      await bloc.close();
+    });
+
+    test('reclaiming restarts the turn timer for the returning human', () async {
+      final bloc = timedBloc(timedGame((g) => redTakenOver(oneRedTokenOut(g))));
+      await wait(20);
+      expect(stateOf(bloc).turnDeadline, isNull, reason: 'bots are not timed');
+
+      bloc.add(const LudoSeatReclaimed(PlayerColor.red));
+      await wait(20);
+      expect(stateOf(bloc).turnDeadline, isNotNull);
+      await bloc.close();
+    });
+
+    test("reclaiming off-turn leaves another bot's turn alone", () async {
+      final bloc = timedBloc(timedGame(
+        (g) => redTakenOver(g).copyWith(activePlayerIndex: 1), // green bot to roll
+        timerOn: false,
+      ));
+      bloc.add(const LudoAiTurnTriggered());
+      await wait(50);
+      bloc.add(const LudoSeatReclaimed(PlayerColor.red));
+      await wait(1000);
+
+      expect(rolls.calls, 1, reason: 'green still rolled');
+      expect(stateOf(bloc).gameState.players[0].isBotControlled, isFalse);
+      await bloc.close();
+    });
+
+    test('a seat that was a bot from the start cannot be reclaimed', () async {
+      final bloc = timedBloc(timedGame((g) => g, timerOn: false));
+      await wait(20);
+      final before = stateOf(bloc).gameState;
+
+      bloc.add(const LudoSeatReclaimed(PlayerColor.green));
+      await wait(20);
+      expect(identical(stateOf(bloc).gameState, before), isTrue);
+      expect(stateOf(bloc).gameState.players[1].isBotControlled, isTrue);
+      expect(snackbars, isEmpty);
       await bloc.close();
     });
 

@@ -1,8 +1,8 @@
 import '../../../../presentation/themes/board_theme.dart';
 import '../../../../models/game_rules.dart';
 import '../../../../models/game_state.dart';
-import '../../../../models/move.dart';
 import '../../../../models/player_color.dart';
+import '../../../../models/move.dart';
 
 /// Sealed base class for all events dispatched to LudoBloc.
 sealed class LudoEvent {
@@ -89,6 +89,12 @@ final class LudoTurnTimedOut extends LudoEvent {
 final class LudoAppLifecycleChanged extends LudoEvent {
   final bool isForeground;
   const LudoAppLifecycleChanged({required this.isForeground});
+}
+
+/// Dispatched when a human takes back a seat a bot took over after timeouts.
+final class LudoSeatReclaimed extends LudoEvent {
+  final PlayerColor color;
+  const LudoSeatReclaimed(this.color);
 }
 
 /// Dispatched to restart current match with identical player config.

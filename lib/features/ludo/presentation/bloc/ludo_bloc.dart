@@ -73,6 +73,8 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
         await _onLudoTurnTimedOut(event, emit);
       case LudoAppLifecycleChanged():
         _isForeground = event.isForeground;
+      case LudoSeatReclaimed():
+        await _onLudoSeatReclaimed(event, emit);
     }
     // Every event can start, end, or change a human's timed turn.
     _syncTurnTimer(emit);
@@ -128,6 +130,37 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     _turnTimer?.cancel();
     _turnTimer = null;
     _turnTimerFor = null;
+  }
+
+  /// Gives a taken-over seat back to its human. If it's that seat's turn,
+  /// the bot's pending step is cancelled and the human continues from the
+  /// same point (same roll, if one was made); a move already animating
+  /// finishes first.
+  Future<void> _onLudoSeatReclaimed(
+    LudoSeatReclaimed event,
+    Emitter<LudoState> emit,
+  ) async {
+    final s = state;
+    if (s is! LudoActiveState) return;
+    final game = engine.reclaimSeat(s.gameState, event.color);
+    if (identical(game, s.gameState)) return;
+
+    if (game.activePlayerColor == event.color) {
+      // Only this seat's bot step; other bots keep their pending turns
+      _botTimer?.cancel();
+      _botTimer = null;
+    }
+
+    final name = game.getPlayer(event.color)!.name;
+    emit(s.copyWith(
+      gameState: game,
+      sideEffect: LudoSnackbarEffect(
+        '$name is back in control',
+        icon: Icons.person,
+        iconColor: Color(event.color.primaryColorValue),
+      ),
+    ));
+    await _autosave();
   }
 
   /// A human ran out of time: record a strike (a bot takes the seat at the

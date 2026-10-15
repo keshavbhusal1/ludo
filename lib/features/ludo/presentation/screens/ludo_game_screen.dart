@@ -10,6 +10,7 @@ import '../../../../models/player_color.dart';
 import '../../../../presentation/themes/board_theme.dart';
 import '../../../../presentation/widgets/board/ludo_board_widget.dart';
 import '../../../../presentation/widgets/dialogs/game_setup_dialog.dart';
+import '../../../../presentation/widgets/dialogs/reclaim_seat_dialog.dart';
 import '../../../../presentation/widgets/dice/animated_dice_widget.dart';
 import '../../../../presentation/widgets/dice/full_screen_dice_roll_overlay.dart';
 import '../../../../presentation/widgets/effects/confetti_overlay.dart';
@@ -127,6 +128,18 @@ class _LudoGameScreenState extends State<LudoGameScreen>
       _currentlyAnimatingMove = null;
       HapticsService.moveLanded(move);
       context.read<LudoBloc>().add(LudoMoveAnimationCompleted(move));
+    }
+  }
+
+  /// Confirms, then hands a taken-over seat back to its human.
+  Future<void> _reclaimSeat(PlayerColor color) async {
+    final bloc = context.read<LudoBloc>();
+    final current = bloc.state;
+    final player = current is LudoActiveState ? current.gameState.getPlayer(color) : null;
+    if (player == null) return;
+
+    if (await confirmReclaimSeat(context, player) && mounted) {
+      bloc.add(LudoSeatReclaimed(color));
     }
   }
 
@@ -361,26 +374,12 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                       // TOP ROW: Compact Red (TL) & Green (TR) Badges
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            if (getPlayer(PlayerColor.red) != null)
-                              PlayerBadgeWidget(
-                                player: getPlayer(PlayerColor.red)!,
-                                isActive: activePlayer.color == PlayerColor.red,
-                                tokensRequired: requiredTokens,
-                              )
-                            else
-                              const SizedBox.shrink(),
-                            if (getPlayer(PlayerColor.green) != null)
-                              PlayerBadgeWidget(
-                                player: getPlayer(PlayerColor.green)!,
-                                isActive: activePlayer.color == PlayerColor.green,
-                                tokensRequired: requiredTokens,
-                              )
-                            else
-                              const SizedBox.shrink(),
-                          ],
+                        child: PlayerBadgeRow(
+                          left: getPlayer(PlayerColor.red),
+                          right: getPlayer(PlayerColor.green),
+                          activeColor: activePlayer.color,
+                          tokensRequired: requiredTokens,
+                          onReclaim: _reclaimSeat,
                         ),
                       ),
 
@@ -420,26 +419,12 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                       // BOTTOM ROW: Compact Blue (BL) & Yellow (BR) Badges
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            if (getPlayer(PlayerColor.blue) != null)
-                              PlayerBadgeWidget(
-                                player: getPlayer(PlayerColor.blue)!,
-                                isActive: activePlayer.color == PlayerColor.blue,
-                                tokensRequired: requiredTokens,
-                              )
-                            else
-                              const SizedBox.shrink(),
-                            if (getPlayer(PlayerColor.yellow) != null)
-                              PlayerBadgeWidget(
-                                player: getPlayer(PlayerColor.yellow)!,
-                                isActive: activePlayer.color == PlayerColor.yellow,
-                                tokensRequired: requiredTokens,
-                              )
-                            else
-                              const SizedBox.shrink(),
-                          ],
+                        child: PlayerBadgeRow(
+                          left: getPlayer(PlayerColor.blue),
+                          right: getPlayer(PlayerColor.yellow),
+                          activeColor: activePlayer.color,
+                          tokensRequired: requiredTokens,
+                          onReclaim: _reclaimSeat,
                         ),
                       ),
 

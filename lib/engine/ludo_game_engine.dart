@@ -344,6 +344,24 @@ class LudoEngine {
     );
   }
 
+  /// Hands a seat a bot took over (after timeouts) back to its human, with
+  /// strikes reset so one more timeout doesn't immediately re-take it.
+  ///
+  /// Returns [state] unchanged for seats that weren't taken over, including
+  /// seats that were bots from the start.
+  GameState reclaimSeat(GameState state, PlayerColor color) {
+    final player = state.getPlayer(color);
+    if (player == null || player.isAi || !player.isDisconnected || state.isGameOver) {
+      return state;
+    }
+    return state.copyWith(
+      players: [
+        for (final p in state.players)
+          p.color == color ? p.copyWith(isDisconnected: false, strikes: 0) : p,
+      ],
+    );
+  }
+
   /// Next player clockwise from the active one, skipping players who have finished.
   int _findNextActivePlayerIndex(GameState state, List<Player> players) {
     final requiredTokens = state.config.mode.tokensToWin;

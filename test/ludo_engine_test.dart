@@ -536,6 +536,21 @@ void main() {
       expect(state.players[0].isDisconnected, isTrue);
       expect(state.players[0].isBotControlled, isTrue);
       expect(state.players[1].strikes, equals(0), reason: 'other players unaffected');
+
+      // The human takes the seat back: strikes reset, timer applies again
+      const engine = LudoEngine();
+      final reclaimed = engine.reclaimSeat(state, PlayerColor.red);
+      expect(reclaimed.players[0].isBotControlled, isFalse);
+      expect(reclaimed.players[0].strikes, equals(0));
+      expect(reclaimed.activePlayerColor, equals(state.activePlayerColor));
+
+      // Only taken-over seats can be reclaimed
+      expect(identical(engine.reclaimSeat(reclaimed, PlayerColor.red), reclaimed), isTrue);
+      final withBot = LudoGameController.newGame(
+        colors: [PlayerColor.red, PlayerColor.green],
+        aiConfig: {PlayerColor.green: true},
+      ).state;
+      expect(identical(engine.reclaimSeat(withBot, PlayerColor.green), withBot), isTrue);
     });
   });
 

@@ -34,7 +34,7 @@ An offline 2D Ludo game for 2–4 players (any mix of humans and bots) built wit
 - **⏩ Game speed:** 1×, 1.5×, or 2×. Scales bot thinking time, the pause after a bot's roll, the dice overlay, and pawn hops.
 - **⏱️ Turn timer (opt-in):** 12 s per human decision, shown as a countdown in the HUD.
   - On timeout the player gets a strike and a bot plays that turn for them: it rolls if needed, then picks the best move, so the roll isn't wasted.
-  - After 3 strikes a bot takes over the seat for the rest of the match. Restarting gives the seat back.
+  - After 3 strikes a bot takes over the seat, and its badge shows an **AUTO** tag. Tap the badge and confirm to take the seat back at any time, with strikes reset to 0. If it's that seat's turn, the human continues from the same point, keeping any roll already made.
   - The timer pauses while the app is in the background and restarts in full on return.
 - **📳 Haptics** for dice rolls, pawn hops, captures (heavy), tokens reaching home (medium), and victory. Toggle in the app bar; the choice is remembered across launches.
 
@@ -160,9 +160,10 @@ flutter analyze   # static analysis
 | File | Covers |
 |---|---|
 | `test/ludo_engine_test.dart` | Board topology, rules (captures, safe squares, exact home, sixes, mandatory capture), game modes, serialization, AI scoring |
-| `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume, turn timer (timeouts, strikes, bot takeover, background pause) |
+| `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume, turn timer (timeouts, strikes, bot takeover, background pause, reclaiming a seat) |
 | `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1/v2 compatibility (timer off), history and undo persistence |
 | `test/widget_test.dart` | Screen loads, dice overlay, undo button and history sheet |
+| `test/presentation/widgets/player_badge_widget_test.dart` | Bot and AUTO markers, screen-reader labels, badge rows fitting a 360-wide phone, tap-to-reclaim and its confirm dialog |
 | `test/presentation/widgets/game_setup_dialog_test.dart` | Game speed and turn-timer settings are preselected, changeable, and returned; hidden settings are preserved |
 | `test/core/services/haptics_service_test.dart` | Capture/home haptic patterns, the on/off switch, and remembering it across launches |
 
@@ -177,7 +178,7 @@ Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. I
 ## 🚧 Known gaps
 
 - **The consecutive-sixes limit has no UI control.** It's only configurable in code; the setup dialog keeps whatever value the current match has.
-- **The turn timer has fixed settings.** The 12 s limit and 3-strike maximum come from `TimerConfig` defaults; only on/off is in the UI. A seat taken over by a bot can't be reclaimed mid-match, and the badges don't mark it (the status line shows the bot playing).
+- **The turn timer has fixed settings.** The 12 s limit and 3-strike maximum come from `TimerConfig` defaults; only on/off is in the UI.
 - **Undo can undo strikes.** Undoing to a choice made before a timeout restores the strike count from that point.
 - **Unused and legacy code:** `player_station_widget.dart` is unused, and `pawn.dart`, `pawn_position.dart`, and `TurnPhase` are kept as legacy aliases.
 - **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
