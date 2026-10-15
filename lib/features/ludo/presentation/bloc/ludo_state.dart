@@ -5,6 +5,7 @@ import '../../../../models/history_entry.dart';
 import '../../../../models/saved_match.dart';
 import '../../../../models/move.dart';
 import '../../../../models/player.dart';
+import '../../../../models/player_color.dart';
 
 /// Sealed side-effect events consumed by BlocListener (SnackBars, haptics, victory).
 sealed class LudoSideEffect {
@@ -88,7 +89,37 @@ final class LudoActiveState extends LudoState {
     return null;
   }
 
-  bool get canUndo => undoTarget != null && animatingMove == null && pendingRoll == null;
+  /// The other human player who has played since [undoTarget]'s choice, if
+  /// any. Undo never rewinds another person's turn, so this locks it.
+  ///
+  /// "Human" means seated as human at setup, including a seat a bot took
+  /// over after timeouts: its turns still belong to that person.
+  Player? get undoBlockedBy {
+    final target = undoTarget;
+    if (target == null) return null;
+    final chooser = target.state.activePlayerColor;
+    bool isOtherHuman(PlayerColor color) {
+      final p = gameState.getPlayer(color);
+      return color != chooser && p != null && !p.isAi;
+    }
+
+    // Turns resolved since that choice
+    for (final entry in history.skip(target.historyLength)) {
+      if (isOtherHuman(entry.color)) return gameState.getPlayer(entry.color);
+    }
+    // A turn in progress: rolled and now choosing
+    if (gameState.fsmState == LudoFsmState.waitingForSelection &&
+        isOtherHuman(gameState.activePlayerColor)) {
+      return gameState.activePlayer;
+    }
+    return null;
+  }
+
+  bool get canUndo =>
+      undoTarget != null &&
+      animatingMove == null &&
+      pendingRoll == null &&
+      undoBlockedBy == null;
 
   LudoActiveState copyWith({
     GameState? gameState,

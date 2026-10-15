@@ -5,6 +5,17 @@ import '../../../features/ludo/presentation/bloc/ludo_event.dart';
 import '../../../features/ludo/presentation/bloc/ludo_state.dart';
 import '../../../models/history_entry.dart';
 
+/// Undo button tooltip: whose choice it returns to, or why it's locked.
+String undoTooltip(LudoActiveState state) {
+  final blockedBy = state.undoBlockedBy;
+  final chooser = state.undoTarget?.state.activePlayer;
+  if (blockedBy != null && chooser != null) {
+    return "Undo locked: ${blockedBy.name} has played since ${chooser.name}'s last choice";
+  }
+  if (state.canUndo && chooser != null) return "Undo ${chooser.name}'s last choice";
+  return 'Undo';
+}
+
 /// Bottom sheet listing every resolved roll this session, newest first.
 /// Rebuilds live as the match continues, and offers undo when available.
 class MoveHistorySheet extends StatelessWidget {
@@ -63,6 +74,22 @@ class MoveHistorySheet extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (active?.undoBlockedBy != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_outline, size: 14, color: Colors.white54),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            undoTooltip(active!),
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Divider(height: 1, color: Color(0xFF334155)),
                 if (history.isEmpty)
                   const Padding(

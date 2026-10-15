@@ -25,6 +25,7 @@ An offline 2D Ludo game for 2–4 players (any mix of humans and bots) built wit
   - Bots "think" for 600–900 ms before rolling and 450–750 ms before moving.
 - **↩️ Undo & move history**
   - Undo returns to the most recent point where a human had more than one token to choose from, **with the same dice** (no re-rolling), undoing any bot turns since. Press again to step further back.
+  - In pass-and-play, undo never rewinds another person's turn: once another human seat has played (or rolled) since your last choice, undo is locked, and the button tooltip and history sheet say who played. Seats a bot took over after timeouts still count as that person's.
   - Turn-timer penalties aren't undone: strikes, seats taken over by a bot, and reclaimed seats stay as they are. If undo lands on a choice for a seat a bot now plays, the bot makes it.
   - The history sheet logs every roll: moves, captures (with the victim), tokens reaching home, rolls with no legal move, and sixes penalties.
 - **💾 Autosave & resume**
@@ -170,12 +171,6 @@ Test helpers:
 - `test/helpers/in_memory_local_data_source.dart` replaces real storage.
 
 Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. Inside `testWidgets`' fake-async zone, real platform channels and storage never complete.
-
----
-
-## 🚧 Known gaps
-
-- **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
 
 ---
 

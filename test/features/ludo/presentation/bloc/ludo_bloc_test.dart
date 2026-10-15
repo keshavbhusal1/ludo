@@ -25,6 +25,7 @@ import 'package:ludo/models/history_entry.dart';
 import 'package:ludo/models/player_color.dart';
 import 'package:ludo/models/saved_match.dart';
 import 'package:ludo/presentation/themes/board_theme.dart';
+import 'package:ludo/presentation/widgets/hud/move_history_sheet.dart';
 
 import '../../../../helpers/in_memory_local_data_source.dart';
 
@@ -94,10 +95,11 @@ void main() {
     int roll, {
     required bool redIsAi,
     required GameState Function(GameState) edit,
+    bool greenIsAi = false,
   }) {
     final game = edit(engine.newGame(
       colors: const [PlayerColor.red, PlayerColor.green],
-      aiConfig: {PlayerColor.red: redIsAi, PlayerColor.green: false},
+      aiConfig: {PlayerColor.red: redIsAi, PlayerColor.green: greenIsAi},
     ));
     final bloc = LudoBloc(
       rollDiceUseCase: RollDiceUseCase(engine, random: _FixedRandom(roll)),
@@ -437,10 +439,11 @@ void main() {
     });
 
     test('a timeout strike is not undone', () async {
-      // Both human, 300 ms timer: margins for red's quick pick and the undo
+      // Red times out at its own choice; the bot picks for red; red undoes
+      // back to that choice. 300 ms timer for comfortable margins.
       final game = twoRedTokensOut(engine.newGame(
         colors: const [PlayerColor.red, PlayerColor.green],
-        aiConfig: const {PlayerColor.red: false, PlayerColor.green: false},
+        aiConfig: const {PlayerColor.red: false, PlayerColor.green: true},
         config: const GameConfig(
           timerConfig: TimerConfig(enabled: true, turnTimeout: Duration(milliseconds: 300)),
         ),
@@ -449,21 +452,21 @@ void main() {
       bloc.add(const LudoDiceRollRequested());
       await wait(20);
       bloc.add(const LudoDiceRollOverlayCompleted()); // red's choice: undo point
-      await wait(20);
-      final move = stateOf(bloc).gameState.validMoves.first;
-      bloc.add(LudoMoveSelected(move));
-      await wait(10);
-      bloc.add(LudoMoveAnimationCompleted(move));
+      await wait(400); // red doesn't pick: strike, the bot picks for red
 
-      await wait(420); // green times out (~300 ms): strike, auto-roll, turn passes
-      expect(stateOf(bloc).gameState.players[1].strikes, 1);
-      expect(stateOf(bloc).gameState.activePlayerColor, PlayerColor.red);
+      final autoMove = stateOf(bloc).animatingMove;
+      expect(autoMove, isNotNull);
+      expect(stateOf(bloc).gameState.players[0].strikes, 1);
+      bloc.add(LudoMoveAnimationCompleted(autoMove!));
+      await wait(20);
+      expect(stateOf(bloc).gameState.activePlayerColor, PlayerColor.green);
 
       bloc.add(const LudoUndoRequested());
       await wait(20);
       final s = stateOf(bloc);
       expect(s.gameState.fsmState, LudoFsmState.waitingForSelection, reason: "back at red's choice");
-      expect(s.gameState.players[1].strikes, 1, reason: "green's strike stands");
+      expect(s.gameState.activePlayerColor, PlayerColor.red);
+      expect(s.gameState.players[0].strikes, 1, reason: "red's strike stands");
       expect(identical(s.undoStack.last.state, s.gameState), isTrue);
       expect(s.canUndo, isFalse, reason: 'already at the only choice point');
       await bloc.close();
@@ -593,14 +596,14 @@ void main() {
     }
 
     test('undo rewinds to the last token choice with the same dice, then allows a different pick', () async {
-      final bloc = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+      final bloc = buildBlocWithRoll(3, redIsAi: false, greenIsAi: true, edit: twoRedTokensOut);
 
       await humanRoll(bloc); // red: 2 choices -> undo point
       expect(stateOf(bloc).undoStack, hasLength(1));
       expect(stateOf(bloc).canUndo, isFalse, reason: 'already at the only choice point');
 
       await play(bloc, 'red_0');
-      await humanRoll(bloc); // green: all in yard, turn passes back to red
+      await humanRoll(bloc); // green bot: all in yard, turn passes back to red
       expect(stateOf(bloc).history.map((e) => e.outcome),
           [TurnOutcome.moved, TurnOutcome.noMoves]);
       expect(stateOf(bloc).canUndo, isTrue);
@@ -625,7 +628,7 @@ void main() {
     });
 
     test('repeated undo steps back through earlier choices', () async {
-      final bloc = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+      final bloc = buildBlocWithRoll(3, redIsAi: false, greenIsAi: true, edit: twoRedTokensOut);
 
       await humanRoll(bloc); // choice P1
       await play(bloc, 'red_0');
@@ -704,7 +707,7 @@ void main() {
 
     test('history and undo survive closing the app and resuming', () async {
       // Saves go through the real shared_preferences JSON store (mocked prefs)
-      final first = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+      final first = buildBlocWithRoll(3, redIsAi: false, greenIsAi: true, edit: twoRedTokensOut);
       await humanRoll(first); // red choice
       await play(first, 'red_0');
       await humanRoll(first); // green passes
@@ -758,7 +761,7 @@ void main() {
     });
 
     test('undoing to a choice for a seat a bot has since taken over lets the bot choose', () async {
-      final bloc = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+      final bloc = buildBlocWithRoll(3, redIsAi: false, greenIsAi: true, edit: twoRedTokensOut);
       await humanRoll(bloc); // red's choice: undo point
       await play(bloc, 'red_0');
       await humanRoll(bloc); // green passes back to red
@@ -781,6 +784,80 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 900)); // bot thinks 450-750 ms
       expect(stateOf(bloc).animatingMove, isNotNull, reason: 'the bot picked a token');
       await bloc.close();
+    });
+
+    group('pass-and-play', () {
+      /// Green has tokens at steps 0 and 10, so a roll of 3 is a choice for green too.
+      GameState bothChoosing(GameState s) {
+        final withRed = twoRedTokensOut(s);
+        final green = withRed.players[1];
+        final tokens = List.of(green.tokens);
+        tokens[0] = tokens[0].copyWith(
+          position: const BoardPosition.track(trackIndex: 14, relativeStep: 0),
+        );
+        tokens[1] = tokens[1].copyWith(
+          position: const BoardPosition.track(trackIndex: 24, relativeStep: 10),
+        );
+        return withRed.copyWith(players: [withRed.players[0], green.copyWith(tokens: tokens)]);
+      }
+
+      test('once another human has played, undo is locked and says why', () async {
+        final bloc = buildBlocWithRoll(3, redIsAi: false, edit: twoRedTokensOut);
+        await humanRoll(bloc); // red's choice
+        await play(bloc, 'red_0');
+        expect(stateOf(bloc).canUndo, isTrue, reason: 'green has not acted yet');
+
+        await humanRoll(bloc); // green (human) rolls: no moves, turn passes
+        final locked = stateOf(bloc);
+        expect(locked.canUndo, isFalse);
+        expect(locked.undoBlockedBy?.name, 'Green');
+        expect(undoTooltip(locked), "Undo locked: Green has played since Red's last choice");
+
+        bloc.add(const LudoUndoRequested());
+        await settle();
+        expect(identical(stateOf(bloc).gameState, locked.gameState), isTrue, reason: 'ignored');
+        expect(stateOf(bloc).history, hasLength(2));
+        await bloc.close();
+      });
+
+      test("each player can undo their own choice, but not past another's", () async {
+        final bloc = buildBlocWithRoll(3, redIsAi: false, edit: bothChoosing);
+        await humanRoll(bloc); // red's choice (P1)
+        await play(bloc, 'red_0');
+        await humanRoll(bloc); // green's choice (P2)
+        expect(stateOf(bloc).undoStack, hasLength(2));
+        expect(stateOf(bloc).canUndo, isFalse, reason: "green has rolled: red can't rewind");
+        expect(stateOf(bloc).undoBlockedBy?.name, 'Green');
+
+        await play(bloc, 'green_0');
+        expect(stateOf(bloc).canUndo, isTrue);
+        expect(undoTooltip(stateOf(bloc)), "Undo Green's last choice");
+
+        bloc.add(const LudoUndoRequested());
+        await settle();
+        final s = stateOf(bloc);
+        expect(s.gameState.activePlayerColor, PlayerColor.green);
+        expect(s.gameState.fsmState, LudoFsmState.waitingForSelection);
+        expect(s.gameState.players[0].tokens[0].relativeStep, 3, reason: "red's move stands");
+        expect(s.history.single.color, PlayerColor.red);
+        expect(s.canUndo, isFalse, reason: "can't go on past green into red's choice");
+        await bloc.close();
+      });
+
+      test('a human seat a bot took over still counts as that player', () async {
+        final bloc = buildBlocWithRoll(3, redIsAi: false, edit: (g) {
+          final withRed = twoRedTokensOut(g);
+          final green = withRed.players[1].copyWith(strikes: 3, isDisconnected: true);
+          return withRed.copyWith(players: [withRed.players[0], green]);
+        });
+        await humanRoll(bloc); // red's choice
+        await play(bloc, 'red_0');
+        await humanRoll(bloc); // green's seat (bot-played) rolls: no moves
+
+        expect(stateOf(bloc).canUndo, isFalse);
+        expect(stateOf(bloc).undoBlockedBy?.name, 'Green');
+        await bloc.close();
+      });
     });
 
     test('history logs captures with the victim and sixes penalties', () async {

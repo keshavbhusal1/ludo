@@ -275,7 +275,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                   color: state.canUndo ? Colors.white : Colors.white24,
                   size: 20,
                 ),
-                tooltip: 'Undo',
+                tooltip: undoTooltip(state),
                 onPressed: state.canUndo
                     ? () => context.read<LudoBloc>().add(const LudoUndoRequested())
                     : null,
