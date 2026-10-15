@@ -524,6 +524,25 @@ void main() {
       await bloc.close();
     });
 
+    test('a message is new once, even when a follow-up update carries it', () async {
+      final bloc = timedBloc(timedGame((g) => redTakenOver(oneRedTokenOut(g))));
+      await wait(20);
+      final states = <LudoState>[bloc.state];
+      bloc.stream.listen(states.add);
+
+      bloc.add(const LudoSeatReclaimed(PlayerColor.red));
+      await wait(20);
+      // The reclaim emit is followed by the turn timer publishing a deadline
+      expect(states.where((s) => s is LudoActiveState && s.turnDeadline != null), isNotEmpty);
+
+      var fresh = 0;
+      for (var i = 1; i < states.length; i++) {
+        if (isNewSideEffect(states[i - 1], states[i])) fresh++;
+      }
+      expect(fresh, 1, reason: "'Red is back in control' shows once");
+      await bloc.close();
+    });
+
     test("reclaiming off-turn leaves another bot's turn alone", () async {
       final bloc = timedBloc(timedGame(
         (g) => redTakenOver(g).copyWith(activePlayerIndex: 1), // green bot to roll
@@ -860,6 +879,49 @@ void main() {
       });
     });
 
+    group('turn notes instead of snackbars', () {
+      test('a bot rolling with no moves gets a note, not a snackbar', () async {
+        final bloc = buildBlocWithRoll(3, redIsAi: false, greenIsAi: true, edit: twoRedTokensOut);
+        await humanRoll(bloc);
+        await play(bloc, 'red_0'); // ordinary move: no note
+        expect(stateOf(bloc).turnNote, isNull);
+        expect(stateOf(bloc).sideEffect, isNull);
+
+        await humanRoll(bloc); // green bot: all in yard, rolls 3
+        expect(stateOf(bloc).turnNote?.text, 'Bot Green rolled 3 — no moves');
+        expect(stateOf(bloc).sideEffect, isNull);
+
+        bloc.add(const LudoDiceRollRequested()); // red rolls: the old note clears
+        await settle();
+        expect(stateOf(bloc).turnNote, isNull);
+        await bloc.close();
+      });
+
+      test('a 6 or a capture earns a note about the extra turn', () async {
+        final six = buildBlocWithRoll(6, redIsAi: false, edit: twoRedTokensOut);
+        await humanRoll(six);
+        await play(six, 'red_0');
+        expect(stateOf(six).turnNote?.text, 'Red rolled a 6 — extra turn');
+        expect(stateOf(six).sideEffect, isNull);
+        await six.close();
+
+        final capture = buildBlocWithRoll(4, redIsAi: false, edit: (s) {
+          final withRed = twoRedTokensOut(s);
+          final green = withRed.players[1];
+          final greenTokens = List.of(green.tokens);
+          greenTokens[0] = greenTokens[0].copyWith(
+            position: const BoardPosition.track(trackIndex: 5, relativeStep: 43),
+          );
+          return withRed.copyWith(players: [withRed.players[0], green.copyWith(tokens: greenTokens)]);
+        });
+        await humanRoll(capture);
+        await play(capture, 'red_0');
+        expect(stateOf(capture).turnNote?.text, "Red captured Green's token — extra turn");
+        expect(stateOf(capture).sideEffect, isNull);
+        await capture.close();
+      });
+    });
+
     test('history logs captures with the victim and sixes penalties', () async {
       // Red at step 0 rolls 4 onto track index 5, where a green token sits
       final bloc = buildBlocWithRoll(4, redIsAi: false, edit: (s) {
@@ -1131,8 +1193,8 @@ void main() {
       wait: const Duration(milliseconds: 50),
       verify: (bloc) {
         final s = bloc.state as LudoActiveState;
-        final effect = s.sideEffect as LudoSnackbarEffect;
-        expect(effect.message, contains('No moves available'));
+        expect(s.sideEffect, isNull, reason: 'no snackbar for a routine no-move roll');
+        expect(s.turnNote?.text, 'Red rolled 6 — no moves');
         expect(s.gameState.activePlayerColor, PlayerColor.green);
         expect(s.gameState.consecutiveSixesCount, 0);
         expect(s.history.single.outcome, TurnOutcome.noMoves);
@@ -1268,5 +1330,29 @@ void main() {
             .having((s) => s.rollerPlayer?.color, 'roller color', PlayerColor.red),
       ],
     );
+  });
+
+  group('isNewSideEffect', () {
+    final game = engine.newGame(colors: const [PlayerColor.red, PlayerColor.green]);
+    final effect = LudoSnackbarEffect('hello');
+    final withEffect = LudoActiveState(gameState: game, sideEffect: effect);
+
+    test('a fresh effect is new', () {
+      expect(isNewSideEffect(LudoActiveState(gameState: game), withEffect), isTrue);
+      expect(isNewSideEffect(const LudoInitial(), withEffect), isTrue);
+      expect(
+        isNewSideEffect(withEffect, withEffect.copyWith(sideEffect: LudoSnackbarEffect('hello'))),
+        isTrue,
+        reason: 'same text, but a separate event',
+      );
+    });
+
+    test('an effect carried over by a later state is not new', () {
+      expect(isNewSideEffect(withEffect, withEffect.copyWith(clearTurnDeadline: true)), isFalse);
+    });
+
+    test('no effect is never new', () {
+      expect(isNewSideEffect(withEffect, withEffect.copyWith(clearSideEffect: true)), isFalse);
+    });
   });
 }

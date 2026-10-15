@@ -325,12 +325,16 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
             rollerPlayer: rollingPlayer,
             pendingRoll: newState,
             clearSideEffect: true,
+            clearTurnNote: true,
           ));
         } else {
           // AI player: smooth inline roll without taking over screen
+          final note = _rollNote(gameState, newState, rollingPlayer.name);
           emit(currentState.copyWith(
             gameState: newState,
             clearSideEffect: true,
+            turnNote: note,
+            clearTurnNote: note == null,
             history: _withRollOutcome(currentState.history, gameState, newState),
           ));
           _autosave();
@@ -358,23 +362,17 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     final roller = currentState.rollerPlayer ?? gameState.activePlayer;
     final rollerName = roller.name.isNotEmpty ? roller.name : roller.color.displayName;
 
-    LudoSideEffect? sideEffect;
-    if (_hitSixesLimit(stateBeforeRoll, rolled)) {
-      sideEffect = LudoSnackbarEffect(
-        '${_countWord(stateBeforeRoll.config.consecutiveSixesLimit)} 6s penalty! '
-        'Turn passes to ${gameState.activePlayer.name}',
-        icon: Icons.warning_amber_rounded,
-        iconColor: const Color(0xFFF87171),
-      );
-    } else if (gameState.validMoves.isEmpty) {
-      if (!roller.isBotControlled) {
-        sideEffect = LudoSnackbarEffect(
-          '$rollerName rolled $rolled — No moves available',
-          icon: Icons.casino_outlined,
-          iconColor: const Color(0xFF94A3B8),
-        );
-      }
-    }
+    // A penalty is worth a snackbar; an ordinary no-move roll is just a note.
+    final penalty = _hitSixesLimit(stateBeforeRoll, rolled);
+    final LudoSideEffect? sideEffect = penalty
+        ? LudoSnackbarEffect(
+            '${_countWord(stateBeforeRoll.config.consecutiveSixesLimit)} 6s penalty! '
+            'Turn passes to ${gameState.activePlayer.name}',
+            icon: Icons.warning_amber_rounded,
+            iconColor: const Color(0xFFF87171),
+          )
+        : null;
+    final note = penalty ? null : _rollNote(stateBeforeRoll, gameState, rollerName);
 
     final history = _withRollOutcome(currentState.history, stateBeforeRoll, gameState);
     // A real choice between tokens is a point the player can undo back to.
@@ -390,6 +388,9 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       clearPendingRoll: true,
       clearRollerPlayer: true,
       sideEffect: sideEffect,
+      clearSideEffect: sideEffect == null,
+      turnNote: note,
+      clearTurnNote: note == null,
       history: history,
       undoStack: undoStack,
     ));
@@ -438,35 +439,18 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
         emit(currentState.copyWith(clearAnimatingMove: true));
       },
       (newState) async {
-        LudoSideEffect? sideEffect;
-        if (newState.isGameOver) {
-          sideEffect = const LudoVictoryEffect();
-        } else if (event.move.isCapture) {
-          sideEffect = LudoSnackbarEffect(
-            'Capture! ${stateBefore.activePlayer.name} gets an extra turn',
-            icon: Icons.flash_on,
-            iconColor: const Color(0xFFFBBF24),
-          );
-        } else if (event.move.isReachingHome) {
-          sideEffect = LudoSnackbarEffect(
-            'Token Home! ${stateBefore.activePlayer.name} gets an extra turn',
-            icon: Icons.star,
-            iconColor: const Color(0xFF34D399),
-          );
-        } else if (event.move.diceRoll == 6 &&
-            newState.activePlayerColor == stateBefore.activePlayerColor) {
-          sideEffect = const LudoSnackbarEffect(
-            'Rolled a 6! Extra Turn',
-            icon: Icons.casino,
-            iconColor: Color(0xFF10B981),
-          );
-        }
+        final entry = _moveEntry(stateBefore, event.move);
+        final LudoSideEffect? sideEffect = newState.isGameOver ? LudoVictoryEffect() : null;
+        final note = newState.isGameOver ? null : _moveNote(stateBefore, newState, entry);
 
         emit(currentState.copyWith(
           gameState: newState,
           clearAnimatingMove: true,
           sideEffect: sideEffect,
-          history: [...currentState.history, _moveEntry(stateBefore, event.move)],
+          clearSideEffect: sideEffect == null,
+          turnNote: note,
+          clearTurnNote: note == null,
+          history: [...currentState.history, entry],
         ));
         if (newState.isGameOver) {
           await _clearAutosave();
@@ -500,7 +484,8 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       clearRollerPlayer: true,
       history: saved.history,
       undoStack: saved.undoStack,
-      sideEffect: const LudoSnackbarEffect(
+      clearTurnNote: true,
+      sideEffect: LudoSnackbarEffect(
         'Restored previous match!',
         icon: Icons.history,
         iconColor: Color(0xFF38BDF8),
@@ -550,6 +535,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       gameState: restored,
       history: current.history.sublist(0, target.historyLength),
       undoStack: undoStack,
+      clearTurnNote: true,
       sideEffect: LudoSnackbarEffect(
         chooser.isBotControlled
             ? "Undone — a bot is choosing for ${chooser.name}"
@@ -568,6 +554,55 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
   static List<UndoPoint> _withUndoPoint(List<UndoPoint> stack, UndoPoint point) {
     final next = [...stack, point];
     return next.length > _maxUndoPoints ? next.sublist(next.length - _maxUndoPoints) : next;
+  }
+
+  /// Note for a roll that ended the turn without a move; null if the roll
+  /// leads to a choice.
+  static TurnNote? _rollNote(GameState before, GameState after, String name) {
+    final roll = after.lastDiceRoll;
+    if (roll == null || after.fsmState == LudoFsmState.waitingForSelection) return null;
+    if (_hitSixesLimit(before, roll)) {
+      return TurnNote(
+        '$name rolled too many 6s — turn passes',
+        icon: Icons.warning_amber_rounded,
+        color: const Color(0xFFF87171),
+      );
+    }
+    return TurnNote(
+      '$name rolled $roll — no moves',
+      icon: Icons.casino_outlined,
+      color: const Color(0xFF94A3B8),
+    );
+  }
+
+  /// Note for a move that earned an extra turn; null for ordinary moves.
+  static TurnNote? _moveNote(GameState before, GameState after, HistoryEntry entry) {
+    final move = entry.move!;
+    final name = entry.playerName;
+    if (move.isCapture) {
+      return TurnNote(
+        entry.capturedPlayerName != null
+            ? "$name captured ${entry.capturedPlayerName}'s token — extra turn"
+            : '$name captured a token — extra turn',
+        icon: Icons.flash_on,
+        color: const Color(0xFFFBBF24),
+      );
+    }
+    if (move.isReachingHome) {
+      return TurnNote(
+        '$name got a token home — extra turn',
+        icon: Icons.star,
+        color: const Color(0xFF34D399),
+      );
+    }
+    if (move.diceRoll == 6 && after.activePlayerColor == before.activePlayerColor) {
+      return TurnNote(
+        '$name rolled a 6 — extra turn',
+        icon: Icons.casino,
+        color: const Color(0xFF10B981),
+      );
+    }
+    return null;
   }
 
   static bool _hitSixesLimit(GameState before, int roll) {

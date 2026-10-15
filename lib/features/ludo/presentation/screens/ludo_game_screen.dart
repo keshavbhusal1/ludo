@@ -197,26 +197,29 @@ class _LudoGameScreenState extends State<LudoGameScreen>
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<LudoBloc, LudoState>(
+    // Each side effect is acted on once: later states carry the same effect
+    // until it's replaced, and must not re-show it.
+    return BlocListener<LudoBloc, LudoState>(
+      listenWhen: isNewSideEffect,
       listener: (context, state) {
-        if (state is LudoActiveState) {
-          // Handle side effects (snackbars / haptics / victory)
-          final sideEffect = state.sideEffect;
-          if (sideEffect is LudoSnackbarEffect) {
-            _showSnackbar(
-              sideEffect.message,
-              icon: sideEffect.icon,
-              iconColor: sideEffect.iconColor,
-            );
-          } else if (sideEffect is LudoVictoryEffect) {
-            HapticsService.victory();
-          }
-
-          // Handle pawn movement animation
-          if (state.animatingMove != null &&
-              state.animatingMove != _currentlyAnimatingMove) {
-            _startPawnAnimation(state.animatingMove!, state.gameState.rules.gameSpeed);
-          }
+        final sideEffect = (state as LudoActiveState).sideEffect;
+        if (sideEffect is LudoSnackbarEffect) {
+          _showSnackbar(
+            sideEffect.message,
+            icon: sideEffect.icon,
+            iconColor: sideEffect.iconColor,
+          );
+        } else if (sideEffect is LudoVictoryEffect) {
+          HapticsService.victory();
+        }
+      },
+      child: BlocConsumer<LudoBloc, LudoState>(
+      listener: (context, state) {
+        // Handle pawn movement animation
+        if (state is LudoActiveState &&
+            state.animatingMove != null &&
+            state.animatingMove != _currentlyAnimatingMove) {
+          _startPawnAnimation(state.animatingMove!, state.gameState.rules.gameSpeed);
         }
       },
       builder: (context, state) {
@@ -493,20 +496,37 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                   const SizedBox(height: 3),
                                   Row(
                                     children: [
-                                      Flexible(
-                                        child: Text(
-                                          activePlayer.isBotControlled
-                                              ? 'Bot thinking...'
-                                              : (isAwaitingRoll
-                                                  ? 'Tap the dice to roll'
-                                                  : 'Tap a bouncing piece to move'),
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: primaryColor,
+                                      // The last turn's result if there is one, else a prompt
+                                      if (state.turnNote case final note?) ...[
+                                        Icon(note.icon, size: 14, color: note.color),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            note.text,
+                                            key: const Key('turn-note'),
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: note.color,
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ] else
+                                        Flexible(
+                                          child: Text(
+                                            activePlayer.isBotControlled
+                                                ? 'Bot thinking...'
+                                                : (isAwaitingRoll
+                                                    ? 'Tap the dice to roll'
+                                                    : 'Tap a bouncing piece to move'),
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: primaryColor,
+                                            ),
+                                          ),
+                                        ),
                                       if (state.turnDeadline != null) ...[
                                         const SizedBox(width: 8),
                                         TurnCountdown(
@@ -598,6 +618,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
           ),
         );
       },
+    ),
     );
   }
 }
