@@ -84,20 +84,8 @@ class GameState {
   }) {
     assert(colors.length >= 2 && colors.length <= 4, 'Game must have 2 to 4 players');
 
-    final effectiveConfig = config ??
-        (rules != null
-            ? GameConfig(
-                mode: rules.winCondition == WinCondition.quick1
-                    ? QuickMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)
-                    : (rules.winCondition == WinCondition.quick2
-                        ? RushMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)
-                        : ClassicMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)),
-                consecutiveSixesLimit: rules.consecutiveSixesLimit,
-                unlockYardOnOneOrSix: rules.unlockYardOnOneOrSix,
-                gameSpeed: rules.gameSpeed,
-                aiDifficulty: rules.aiDifficulty,
-              )
-            : const GameConfig());
+    final effectiveConfig =
+        config ?? (rules != null ? GameConfig.fromRules(rules) : const GameConfig());
 
     final unlockedPerPlayer = effectiveConfig.mode.startingUnlockedTokens;
 
@@ -134,6 +122,7 @@ class GameState {
         unlockYardOnOneOrSix: config.unlockYardOnOneOrSix,
         consecutiveSixesLimit: config.consecutiveSixesLimit,
         gameSpeed: config.gameSpeed,
+        turnTimerEnabled: config.timerConfig.enabled,
       );
 
   TurnPhase get turnPhase {
@@ -208,17 +197,7 @@ class GameState {
 
     GameConfig effectiveConfig = config ?? this.config;
     if (config == null && rules != null) {
-      effectiveConfig = GameConfig(
-        mode: rules.winCondition == WinCondition.quick1
-            ? QuickMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)
-            : (rules.winCondition == WinCondition.quick2
-                ? RushMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)
-                : ClassicMode(mandatoryKillRequired: rules.mustCaptureBeforeHome)),
-        consecutiveSixesLimit: rules.consecutiveSixesLimit,
-        unlockYardOnOneOrSix: rules.unlockYardOnOneOrSix,
-        gameSpeed: rules.gameSpeed,
-        aiDifficulty: rules.aiDifficulty,
-      );
+      effectiveConfig = GameConfig.fromRules(rules);
     }
 
     return GameState(
@@ -258,20 +237,8 @@ class GameState {
     final config = json['config'] != null
         ? GameConfig.fromJson(json['config'] as Map<String, dynamic>)
         : (json['rules'] != null
-            ? () {
-                final r = GameRules.fromJson(json['rules'] as Map<String, dynamic>);
-                return GameConfig(
-                  mode: r.winCondition == WinCondition.quick1
-                      ? QuickMode(mandatoryKillRequired: r.mustCaptureBeforeHome)
-                      : (r.winCondition == WinCondition.quick2
-                          ? RushMode(mandatoryKillRequired: r.mustCaptureBeforeHome)
-                          : ClassicMode(mandatoryKillRequired: r.mustCaptureBeforeHome)),
-                  consecutiveSixesLimit: r.consecutiveSixesLimit,
-                  unlockYardOnOneOrSix: r.unlockYardOnOneOrSix,
-                  gameSpeed: r.gameSpeed,
-                  aiDifficulty: r.aiDifficulty,
-                );
-              }()
+            ? GameConfig.fromRules(
+                GameRules.fromJson(json['rules'] as Map<String, dynamic>))
             : const GameConfig());
 
     final fsmState = json['fsmState'] != null

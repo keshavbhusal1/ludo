@@ -18,6 +18,7 @@ import 'package:ludo/features/ludo/presentation/bloc/ludo_bloc.dart';
 import 'package:ludo/features/ludo/presentation/bloc/ludo_event.dart';
 import 'package:ludo/features/ludo/presentation/bloc/ludo_state.dart';
 import 'package:ludo/models/board_position.dart';
+import 'package:ludo/models/game_config.dart';
 import 'package:ludo/models/game_rules.dart';
 import 'package:ludo/models/game_state.dart';
 import 'package:ludo/models/history_entry.dart';
@@ -116,6 +117,19 @@ void main() {
     final tokens = List.of(red.tokens);
     tokens[0] = tokens[0].copyWith(
       position: const BoardPosition.track(trackIndex: 1, relativeStep: 0),
+    );
+    return s.copyWith(players: [red.copyWith(tokens: tokens), s.players[1]]);
+  }
+
+  /// Red has tokens at steps 0 and 10, so a roll of 3 is a real choice.
+  GameState twoRedTokensOut(GameState s) {
+    final red = s.players[0];
+    final tokens = List.of(red.tokens);
+    tokens[0] = tokens[0].copyWith(
+      position: const BoardPosition.track(trackIndex: 1, relativeStep: 0),
+    );
+    tokens[1] = tokens[1].copyWith(
+      position: const BoardPosition.track(trackIndex: 11, relativeStep: 10),
     );
     return s.copyWith(players: [red.copyWith(tokens: tokens), s.players[1]]);
   }
@@ -234,21 +248,179 @@ void main() {
     });
   });
 
+  group('LudoBloc turn timer', () {
+    late _CountingRollDice rolls;
+
+    /// Snackbar messages in emission order, as the screen's listener sees them.
+    late List<String> snackbars;
+    const timeout = Duration(milliseconds: 150);
+
+    Future<void> wait(int ms) => Future<void>.delayed(Duration(milliseconds: ms));
+    LudoActiveState stateOf(LudoBloc bloc) => bloc.state as LudoActiveState;
+
+    /// Red (human) vs green (bot) with a 150 ms turn timer, adjusted by [edit].
+    GameState timedGame(GameState Function(GameState) edit, {bool timerOn = true}) =>
+        edit(engine.newGame(
+          colors: const [PlayerColor.red, PlayerColor.green],
+          aiConfig: const {PlayerColor.red: false, PlayerColor.green: true},
+          config: GameConfig(
+            timerConfig: TimerConfig(enabled: timerOn, turnTimeout: timeout),
+          ),
+        ));
+
+    LudoBloc timedBloc(GameState game, {int roll = 3}) {
+      rolls = _CountingRollDice(engine, random: _FixedRandom(roll));
+      final repo = LudoRepositoryImpl(localDataSource: InMemoryLocalDataSource());
+      final bloc = LudoBloc(
+        rollDiceUseCase: rolls,
+        executeMoveUseCase: ExecuteMoveUseCase(engine),
+        getSavedGameUseCase: GetSavedGameUseCase(repo),
+        saveGameUseCase: SaveGameUseCase(repo),
+        clearSavedGameUseCase: ClearSavedGameUseCase(repo),
+        aiEngine: aiEngine,
+      );
+      snackbars = [];
+      bloc.stream.listen((s) {
+        final effect = s is LudoActiveState ? s.sideEffect : null;
+        if (effect is LudoSnackbarEffect) snackbars.add(effect.message);
+      });
+      bloc.emit(LudoActiveState(gameState: game));
+      // Any event re-evaluates the timer; this one changes nothing else
+      bloc.add(const LudoAppLifecycleChanged(isForeground: true));
+      return bloc;
+    }
+
+    test('is off by default: no deadline and nothing happens', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut, timerOn: false));
+      await wait(300);
+      expect(stateOf(bloc).turnDeadline, isNull);
+      expect(rolls.calls, 0);
+      expect(stateOf(bloc).gameState.players[0].strikes, 0);
+      await bloc.close();
+    });
+
+    test('publishes a deadline for the countdown when a human turn starts', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut));
+      await wait(20);
+      final deadline = stateOf(bloc).turnDeadline;
+      expect(deadline, isNotNull);
+      expect(deadline!.difference(DateTime.now()).inMilliseconds, inInclusiveRange(0, 150));
+      await bloc.close();
+    });
+
+    test('timeout before rolling: a strike, then the bot rolls and moves for them', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut));
+      await wait(250);
+
+      final s = stateOf(bloc);
+      expect(rolls.calls, 1);
+      expect(s.gameState.players[0].strikes, 1);
+      expect(s.gameState.players[0].isBotControlled, isFalse);
+      expect(s.animatingMove?.pawnId, 'red_0', reason: 'the roll was not wasted');
+      expect(s.turnDeadline, isNull);
+      expect(snackbars, contains(contains('ran out of time (strike 1/3)')));
+      await bloc.close();
+    });
+
+    test('timeout while choosing a token auto-plays the best move without re-rolling', () async {
+      final bloc = timedBloc(timedGame(twoRedTokensOut));
+      bloc.add(const LudoDiceRollRequested());
+      await wait(20);
+      bloc.add(const LudoDiceRollOverlayCompleted());
+      await wait(20);
+      expect(stateOf(bloc).gameState.validMoves, hasLength(2));
+      expect(stateOf(bloc).turnDeadline, isNotNull, reason: 'choosing is timed too');
+
+      await wait(250);
+      final s = stateOf(bloc);
+      expect(rolls.calls, 1);
+      expect(s.gameState.players[0].strikes, 1);
+      expect(s.animatingMove, isNotNull);
+      await bloc.close();
+    });
+
+    test('acting in time cancels the timer (no strike while the dice tumble)', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut));
+      await wait(20);
+      bloc.add(const LudoDiceRollRequested()); // overlay now showing
+      await wait(300);
+
+      final s = stateOf(bloc);
+      expect(s.isShowingRollOverlay, isTrue);
+      expect(s.turnDeadline, isNull);
+      expect(s.gameState.players[0].strikes, 0);
+      await bloc.close();
+    });
+
+    test('the third timeout hands the seat to a bot', () async {
+      final bloc = timedBloc(timedGame((g) {
+        final red = oneRedTokenOut(g).players[0].copyWith(strikes: 2);
+        return g.copyWith(players: [red, g.players[1]]);
+      }));
+      await wait(250);
+
+      final s = stateOf(bloc);
+      final red = s.gameState.players[0];
+      expect(red.strikes, 3);
+      expect(red.isBotControlled, isTrue);
+      expect(red.isAi, isFalse, reason: 'still a human seat; restarting gives it back');
+      expect(snackbars, contains(contains('a bot takes over')));
+      await bloc.close();
+    });
+
+    test('a bot-controlled seat is played by the bot with no timer', () async {
+      final bloc = timedBloc(timedGame((g) {
+        final red = g.players[0].copyWith(strikes: 3, isDisconnected: true);
+        return g.copyWith(players: [red, g.players[1]]);
+      }));
+      // Nudge the bot loop the way a turn change would
+      bloc.add(const LudoAiTurnTriggered());
+      await wait(20);
+      expect(stateOf(bloc).turnDeadline, isNull);
+
+      await wait(1000); // bot thinks 600-900 ms, then rolls
+      expect(rolls.calls, 1);
+      expect(stateOf(bloc).gameState.players[0].strikes, 3, reason: 'bots take no strikes');
+      await bloc.close();
+    });
+
+    test('the timer pauses in the background and restarts in full on return', () async {
+      final bloc = timedBloc(timedGame(oneRedTokenOut));
+      await wait(20);
+      bloc.add(const LudoAppLifecycleChanged(isForeground: false));
+      await wait(300);
+      expect(stateOf(bloc).turnDeadline, isNull);
+      expect(stateOf(bloc).gameState.players[0].strikes, 0);
+      expect(rolls.calls, 0);
+
+      bloc.add(const LudoAppLifecycleChanged(isForeground: true));
+      await wait(20);
+      final deadline = stateOf(bloc).turnDeadline;
+      expect(deadline, isNotNull);
+      expect(deadline!.difference(DateTime.now()).inMilliseconds, greaterThan(100));
+      await bloc.close();
+    });
+
+    test('restart keeps the timer setting', () async {
+      final bloc = buildBloc();
+      bloc.add(const LudoStarted(
+        colors: [PlayerColor.red, PlayerColor.green],
+        aiConfig: {PlayerColor.red: false, PlayerColor.green: true},
+        rules: GameRules(turnTimerEnabled: true),
+      ));
+      await wait(20);
+      expect(stateOf(bloc).turnDeadline, isNotNull);
+
+      bloc.add(const LudoMatchRestarted());
+      await wait(20);
+      expect(stateOf(bloc).gameState.config.timerConfig.enabled, isTrue);
+      expect(stateOf(bloc).turnDeadline, isNotNull);
+      await bloc.close();
+    });
+  });
+
   group('LudoBloc undo and move history', () {
     Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
-
-    /// Red has tokens at steps 0 and 10, so a roll of 3 is a real choice.
-    GameState twoRedTokensOut(GameState s) {
-      final red = s.players[0];
-      final tokens = List.of(red.tokens);
-      tokens[0] = tokens[0].copyWith(
-        position: const BoardPosition.track(trackIndex: 1, relativeStep: 0),
-      );
-      tokens[1] = tokens[1].copyWith(
-        position: const BoardPosition.track(trackIndex: 11, relativeStep: 10),
-      );
-      return s.copyWith(players: [red.copyWith(tokens: tokens), s.players[1]]);
-    }
 
     LudoActiveState stateOf(LudoBloc bloc) => bloc.state as LudoActiveState;
 

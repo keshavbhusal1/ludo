@@ -57,8 +57,11 @@ final class LudoActiveState extends LudoState {
   /// Every resolved roll this session, oldest first.
   final List<HistoryEntry> history;
 
-  /// Undo targets, oldest first. Not persisted: a resumed match starts empty.
+  /// Undo targets, oldest first.
   final List<UndoPoint> undoStack;
+
+  /// When the current human turn times out, if the turn timer is running.
+  final DateTime? turnDeadline;
 
   const LudoActiveState({
     required this.gameState,
@@ -69,6 +72,7 @@ final class LudoActiveState extends LudoState {
     this.sideEffect,
     this.history = const [],
     this.undoStack = const [],
+    this.turnDeadline,
     super.themeType,
   });
 
@@ -100,6 +104,8 @@ final class LudoActiveState extends LudoState {
     bool clearRollerPlayer = false,
     List<HistoryEntry>? history,
     List<UndoPoint>? undoStack,
+    DateTime? turnDeadline,
+    bool clearTurnDeadline = false,
     BoardThemeType? themeType,
   }) {
     return LudoActiveState(
@@ -111,6 +117,7 @@ final class LudoActiveState extends LudoState {
       sideEffect: clearSideEffect ? null : (sideEffect ?? this.sideEffect),
       history: history ?? this.history,
       undoStack: undoStack ?? this.undoStack,
+      turnDeadline: clearTurnDeadline ? null : (turnDeadline ?? this.turnDeadline),
       themeType: themeType ?? this.themeType,
     );
   }

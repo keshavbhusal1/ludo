@@ -59,6 +59,10 @@ class Player {
   bool get hasCapturedOpponent => hasKilledOpponent;
   int get finishedPawnCount => finishedTokenCount;
 
+  /// Whether a bot plays this seat: a bot from the start, or a human whose
+  /// seat was taken over after too many turn timeouts.
+  bool get isBotControlled => isAi || isDisconnected;
+
   bool get isFinished => tokens.every((t) => t.isGoal);
   int get finishedTokenCount => tokens.where((t) => t.isGoal).length;
 

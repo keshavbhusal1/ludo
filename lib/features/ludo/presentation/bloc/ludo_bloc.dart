@@ -69,7 +69,118 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
         _onLudoMatchRestarted(event, emit);
       case LudoUndoRequested():
         await _onLudoUndoRequested(event, emit);
+      case LudoTurnTimedOut():
+        await _onLudoTurnTimedOut(event, emit);
+      case LudoAppLifecycleChanged():
+        _isForeground = event.isForeground;
     }
+    // Every event can start, end, or change a human's timed turn.
+    _syncTurnTimer(emit);
+  }
+
+  /// Timer for the current human decision, if the match uses the turn timer.
+  Timer? _turnTimer;
+
+  /// The game state [_turnTimer] was started for (a turn = one state object).
+  GameState? _turnTimerFor;
+
+  bool _isForeground = true;
+
+  /// Whether a human is due to act now: roll, or pick a token.
+  static bool _humanDecisionPending(LudoActiveState s) {
+    final game = s.gameState;
+    return !game.isGameOver &&
+        !game.activePlayer.isBotControlled &&
+        s.pendingRoll == null &&
+        s.animatingMove == null &&
+        (game.turnPhase == TurnPhase.awaitingRoll ||
+            game.turnPhase == TurnPhase.awaitingPawnSelection);
+  }
+
+  /// Starts, keeps, or stops the turn timer to match the current state, and
+  /// publishes the deadline for the countdown UI.
+  void _syncTurnTimer(Emitter<LudoState> emit) {
+    final s = state;
+    if (s is! LudoActiveState) return;
+
+    final shouldRun = _isForeground &&
+        s.gameState.config.timerConfig.enabled &&
+        _humanDecisionPending(s);
+
+    if (!shouldRun) {
+      _stopTurnTimer();
+      if (s.turnDeadline != null) emit(s.copyWith(clearTurnDeadline: true));
+      return;
+    }
+    if (_turnTimer != null && identical(_turnTimerFor, s.gameState)) return;
+
+    _stopTurnTimer();
+    final forState = s.gameState;
+    final limit = forState.config.timerConfig.turnTimeout;
+    _turnTimerFor = forState;
+    _turnTimer = Timer(limit, () {
+      if (!isClosed) add(LudoTurnTimedOut(forState));
+    });
+    emit(s.copyWith(turnDeadline: DateTime.now().add(limit)));
+  }
+
+  void _stopTurnTimer() {
+    _turnTimer?.cancel();
+    _turnTimer = null;
+    _turnTimerFor = null;
+  }
+
+  /// A human ran out of time: record a strike (a bot takes the seat at the
+  /// limit) and let the bot play this turn for them — roll if needed, then
+  /// the best move — so the roll isn't wasted.
+  Future<void> _onLudoTurnTimedOut(
+    LudoTurnTimedOut event,
+    Emitter<LudoState> emit,
+  ) async {
+    final s = state;
+    if (s is! LudoActiveState) return;
+    // Stale: the player acted, or the match changed, before the timer fired.
+    if (!identical(s.gameState, event.forState) || !_humanDecisionPending(s)) return;
+    _stopTurnTimer();
+
+    final before = s.gameState;
+    final player = before.activePlayer;
+    var game = engine.handleTurnTimeout(before);
+    final struck = game.activePlayer;
+    final maxStrikes = game.config.timerConfig.maxStrikes;
+    var history = s.history;
+
+    if (game.turnPhase == TurnPhase.awaitingRoll) {
+      final rolled = rollDiceUseCase(game).getOrElse((failure) {
+        debugPrint('Auto-roll failed: $failure');
+        return game;
+      });
+      history = _withRollOutcome(history, game, rolled);
+      game = rolled;
+    }
+
+    emit(s.copyWith(
+      gameState: game,
+      history: history,
+      clearTurnDeadline: true,
+      sideEffect: LudoSnackbarEffect(
+        struck.isDisconnected && !player.isDisconnected
+            ? "${player.name} timed out $maxStrikes times — a bot takes over"
+            : "${player.name} ran out of time (strike ${struck.strikes}/$maxStrikes) — auto-playing",
+        icon: Icons.timer_off,
+        iconColor: const Color(0xFFF87171),
+      ),
+    ));
+
+    if (game.turnPhase == TurnPhase.awaitingPawnSelection &&
+        game.activePlayerColor == player.color) {
+      final best = aiEngine.selectBestMove(state: game, validMoves: game.validMoves);
+      _onLudoMoveSelected(LudoMoveSelected(best), emit);
+    } else if (game.activePlayer.isBotControlled) {
+      // No legal move: the turn passed straight on to a bot
+      _scheduleBotStep(_scaled(700), const LudoAiTurnTriggered());
+    }
+    await _autosave();
   }
 
   /// Pending delayed events. All are cancelled when a different match takes over.
@@ -114,6 +225,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     }
     _timers.clear();
     _botTimer = null;
+    _stopTurnTimer();
   }
 
   @override
@@ -146,7 +258,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       themeType: event.themeType,
     ));
 
-    if (game.activePlayer.isAi) {
+    if (game.activePlayer.isBotControlled) {
       add(const LudoAiTurnTriggered());
     }
   }
@@ -171,7 +283,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     rollResult.fold(
       (failure) => debugPrint('Dice roll failed: $failure'),
       (newState) {
-        if (!rollingPlayer.isAi) {
+        if (!rollingPlayer.isBotControlled) {
           // Human player: launch dramatic 3D tumbling overlay; the result is
           // revealed (applied to gameState) when the overlay finishes.
           emit(currentState.copyWith(
@@ -219,7 +331,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
         iconColor: const Color(0xFFF87171),
       );
     } else if (gameState.validMoves.isEmpty) {
-      if (!roller.isAi) {
+      if (!roller.isBotControlled) {
         sideEffect = LudoSnackbarEffect(
           '$rollerName rolled $rolled — No moves available',
           icon: Icons.casino_outlined,
@@ -248,10 +360,10 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     await _autosave();
 
     if (gameState.turnPhase == TurnPhase.awaitingPawnSelection) {
-      if (gameState.validMoves.length == 1 && !gameState.activePlayer.isAi) {
+      if (gameState.validMoves.length == 1 && !gameState.activePlayer.isBotControlled) {
         // Human player with single forced move: auto-move gently
         _schedule(_scaled(220), LudoMoveSelected(gameState.validMoves.first));
-      } else if (gameState.activePlayer.isAi) {
+      } else if (gameState.activePlayer.isBotControlled) {
         add(const LudoAiTurnTriggered());
       }
     } else {
@@ -326,7 +438,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
           await _autosave();
         }
 
-        if (newState.activePlayer.isAi) {
+        if (newState.activePlayer.isBotControlled) {
           add(const LudoAiTurnTriggered());
         }
       },
@@ -359,7 +471,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
       ),
     ));
 
-    if (saved.game.activePlayer.isAi) {
+    if (saved.game.activePlayer.isBotControlled) {
       add(const LudoAiTurnTriggered());
     }
   }
@@ -480,7 +592,7 @@ class LudoBloc extends Bloc<LudoEvent, LudoState> {
     if (state is! LudoActiveState) return;
     final gameState = (state as LudoActiveState).gameState;
 
-    if (gameState.isGameOver || !gameState.activePlayer.isAi) return;
+    if (gameState.isGameOver || !gameState.activePlayer.isBotControlled) return;
     final speed = gameState.rules.gameSpeed;
 
     if (gameState.turnPhase == TurnPhase.awaitingRoll) {

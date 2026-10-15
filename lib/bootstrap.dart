@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'core/services/haptics_service.dart';
 import 'engine/ai/ludo_ai_engine.dart';
 import 'engine/ludo_game_engine.dart';
 import 'features/ludo/data/datasources/ludo_local_data_source.dart';
@@ -27,6 +28,7 @@ Future<void> bootstrap() async {
 
   if (!sl.isRegistered<LudoLocalDataSource>()) {
     final prefs = await SharedPreferences.getInstance();
+    HapticsService.loadFrom(prefs);
 
     // Data Sources
     sl.registerLazySingleton<LudoLocalDataSource>(

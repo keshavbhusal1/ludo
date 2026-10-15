@@ -1,5 +1,6 @@
 import '../../../../presentation/themes/board_theme.dart';
 import '../../../../models/game_rules.dart';
+import '../../../../models/game_state.dart';
 import '../../../../models/move.dart';
 import '../../../../models/player_color.dart';
 
@@ -74,6 +75,20 @@ final class LudoThemeChanged extends LudoEvent {
 /// Dispatched to rewind to the most recent human token choice (same dice).
 final class LudoUndoRequested extends LudoEvent {
   const LudoUndoRequested();
+}
+
+/// Dispatched by the turn timer when a human's turn runs out.
+final class LudoTurnTimedOut extends LudoEvent {
+  /// The game state the timer was started for; stale if the game moved on.
+  final GameState forState;
+  const LudoTurnTimedOut(this.forState);
+}
+
+/// Dispatched when the app moves to or from the background; the turn timer
+/// is paused while in the background.
+final class LudoAppLifecycleChanged extends LudoEvent {
+  final bool isForeground;
+  const LudoAppLifecycleChanged({required this.isForeground});
 }
 
 /// Dispatched to restart current match with identical player config.

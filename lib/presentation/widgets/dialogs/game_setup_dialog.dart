@@ -28,6 +28,9 @@ class GameSetupDialog extends StatefulWidget {
 }
 
 class _GameSetupDialogState extends State<GameSetupDialog> {
+  /// Multipliers offered for bot thinking, dice settling and pawn hops.
+  static const List<double> _speedOptions = [1.0, 1.5, 2.0];
+
   int _playerCount = 4;
   final Map<PlayerColor, bool> _aiMap = {
     PlayerColor.red: false,
@@ -37,9 +40,11 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   };
   WinCondition _winCondition = WinCondition.classic;
   AiDifficulty _aiDifficulty = AiDifficulty.medium;
+  double _gameSpeed = 1.0;
   BoardThemeType _themeType = BoardThemeType.darkModern;
   bool _mustCapture = false;
   bool _unlockOneOrSix = false;
+  bool _turnTimer = false;
 
   @override
   void initState() {
@@ -50,11 +55,16 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
       _aiMap.addAll(config.aiConfig);
       _winCondition = config.rules.winCondition;
       _aiDifficulty = config.rules.aiDifficulty;
+      _gameSpeed = config.rules.gameSpeed;
       _themeType = config.themeType;
       _mustCapture = config.rules.mustCaptureBeforeHome;
       _unlockOneOrSix = config.rules.unlockYardOnOneOrSix;
+      _turnTimer = config.rules.turnTimerEnabled;
     }
   }
+
+  static String _speedLabel(double speed) =>
+      '${speed == speed.roundToDouble() ? speed.toInt() : speed}×';
 
   List<PlayerColor> _getActiveColors() {
     if (_playerCount == 2) {
@@ -255,6 +265,49 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               ),
               const SizedBox(height: 16),
 
+              // Game Speed
+              const Text(
+                'Game Speed',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: _speedOptions.map((speed) {
+                  final isSelected = _gameSpeed == speed;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                      child: InkWell(
+                        onTap: () => setState(() => _gameSpeed = speed),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFF334155),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected ? Colors.white : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              _speedLabel(speed),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
               // Board Theme
               const Text(
                 'Visual Board Theme',
@@ -356,6 +409,16 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
                 activeTrackColor: const Color(0xFF3B82F6).withValues(alpha: 0.5),
                 onChanged: (val) => setState(() => _unlockOneOrSix = val),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Turn timer (12 s)', style: TextStyle(color: Colors.white, fontSize: 12)),
+                subtitle: const Text('On timeout a bot plays the turn; after 3 timeouts it takes over the seat', style: TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                value: _turnTimer,
+                activeThumbColor: const Color(0xFF3B82F6),
+                activeTrackColor: const Color(0xFF3B82F6).withValues(alpha: 0.5),
+                onChanged: (val) => setState(() => _turnTimer = val),
+              ),
             ],
           ),
         ),
@@ -373,6 +436,11 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
               aiDifficulty: _aiDifficulty,
               mustCaptureBeforeHome: _mustCapture,
               unlockYardOnOneOrSix: _unlockOneOrSix,
+              gameSpeed: _gameSpeed,
+              turnTimerEnabled: _turnTimer,
+              // Not editable here; keep the current match's value
+              consecutiveSixesLimit:
+                  widget.initialConfig?.rules.consecutiveSixesLimit ?? 3,
             ),
             themeType: _themeType,
           );

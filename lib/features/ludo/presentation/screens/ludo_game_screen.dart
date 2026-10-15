@@ -15,6 +15,7 @@ import '../../../../presentation/widgets/dice/full_screen_dice_roll_overlay.dart
 import '../../../../presentation/widgets/effects/confetti_overlay.dart';
 import '../../../../presentation/widgets/hud/move_history_sheet.dart';
 import '../../../../presentation/widgets/hud/player_badge_widget.dart';
+import '../../../../presentation/widgets/hud/turn_countdown.dart';
 import '../bloc/ludo_bloc.dart';
 import '../bloc/ludo_event.dart';
 import '../bloc/ludo_state.dart';
@@ -28,7 +29,7 @@ class LudoGameScreen extends StatefulWidget {
 }
 
 class _LudoGameScreenState extends State<LudoGameScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pawnHopController;
   Move? _currentlyAnimatingMove;
 
@@ -39,12 +40,27 @@ class _LudoGameScreenState extends State<LudoGameScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pawnHopController.dispose();
     super.dispose();
+  }
+
+  /// Pauses the turn timer while the app is in the background.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    final bool? isForeground = switch (lifecycle) {
+      AppLifecycleState.resumed => true,
+      AppLifecycleState.paused || AppLifecycleState.hidden || AppLifecycleState.detached => false,
+      AppLifecycleState.inactive => null, // transient (e.g. notification shade)
+    };
+    if (isForeground != null) {
+      context.read<LudoBloc>().add(LudoAppLifecycleChanged(isForeground: isForeground));
+    }
   }
 
   void _showSnackbar(
@@ -109,6 +125,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
 
     if (mounted && _currentlyAnimatingMove == move) {
       _currentlyAnimatingMove = null;
+      HapticsService.moveLanded(move);
       context.read<LudoBloc>().add(LudoMoveAnimationCompleted(move));
     }
   }
@@ -150,13 +167,13 @@ class _LudoGameScreenState extends State<LudoGameScreen>
       final roller = state.rollerPlayer ?? active;
       return '${roller.name} is rolling the dice...';
     } else if (game.turnPhase == TurnPhase.awaitingRoll) {
-      if (active.isAi) {
+      if (active.isBotControlled) {
         return '${active.name} is rolling the dice...';
       } else {
         return "${active.name}'s turn — Tap the dice to roll";
       }
     } else if (game.turnPhase == TurnPhase.awaitingPawnSelection) {
-      if (active.isAi) {
+      if (active.isBotControlled) {
         return '${active.name} is moving token...';
       } else {
         return 'Tap a highlighted token to move';
@@ -200,7 +217,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
         final gameState = state.gameState;
         final activePlayer = gameState.activePlayer;
         final primaryColor = Color(activePlayer.color.primaryColorValue);
-        final isHumanTurn = !activePlayer.isAi;
+        final isHumanTurn = !activePlayer.isBotControlled;
         final isAwaitingRoll = gameState.turnPhase == TurnPhase.awaitingRoll;
         final requiredTokens = gameState.rules.winCondition.tokensRequired;
 
@@ -265,7 +282,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                 ),
                 tooltip: 'Haptics',
                 onPressed: () {
-                  setState(() => HapticsService.isEnabled = !HapticsService.isEnabled);
+                  setState(() => HapticsService.setEnabled(!HapticsService.isEnabled));
                   _showSnackbar(
                     HapticsService.isEnabled ? 'Haptics On' : 'Haptics Off',
                     icon: Icons.vibration,
@@ -461,7 +478,7 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                     icon: Icons.touch_app,
                                     iconColor: const Color(0xFFFBBF24),
                                   );
-                                } else if (activePlayer.isAi) {
+                                } else if (activePlayer.isBotControlled) {
                                   _showSnackbar(
                                     "${activePlayer.name} is taking their turn...",
                                     icon: Icons.smart_toy,
@@ -489,16 +506,30 @@ class _LudoGameScreenState extends State<LudoGameScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
-                                    activePlayer.isAi
-                                        ? 'Bot thinking...'
-                                        : (isAwaitingRoll
-                                            ? 'Tap the dice to roll'
-                                            : 'Tap a bouncing piece to move'),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: primaryColor,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          activePlayer.isBotControlled
+                                              ? 'Bot thinking...'
+                                              : (isAwaitingRoll
+                                                  ? 'Tap the dice to roll'
+                                                  : 'Tap a bouncing piece to move'),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: primaryColor,
+                                          ),
+                                        ),
+                                      ),
+                                      if (state.turnDeadline != null) ...[
+                                        const SizedBox(width: 8),
+                                        TurnCountdown(
+                                          deadline: state.turnDeadline!,
+                                          color: primaryColor,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),

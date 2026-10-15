@@ -8,13 +8,13 @@ class TimerConfig {
   /// Maximum strikes allowed before penalty / disconnect (default 3 strikes).
   final int maxStrikes;
 
-  /// Whether the turn timer is actively enforced.
+  /// Whether the turn timer is actively enforced (opt-in).
   final bool enabled;
 
   const TimerConfig({
     this.turnTimeout = const Duration(seconds: 12),
     this.maxStrikes = 3,
-    this.enabled = true,
+    this.enabled = false,
   });
 
   TimerConfig copyWith({
@@ -39,7 +39,7 @@ class TimerConfig {
         turnTimeout:
             Duration(seconds: json['turnTimeoutSeconds'] as int? ?? 12),
         maxStrikes: json['maxStrikes'] as int? ?? 3,
-        enabled: json['enabled'] as bool? ?? true,
+        enabled: json['enabled'] as bool? ?? false,
       );
 
   @override
@@ -206,6 +206,23 @@ class GameConfig {
       timerConfig: timerConfig,
       gameSpeed: gameSpeed,
       aiDifficulty: aiDifficulty,
+    );
+  }
+
+  /// The engine config for a set of user-facing [rules].
+  factory GameConfig.fromRules(GameRules rules) {
+    final kill = rules.mustCaptureBeforeHome;
+    return GameConfig(
+      mode: switch (rules.winCondition) {
+        WinCondition.quick1 => QuickMode(mandatoryKillRequired: kill),
+        WinCondition.quick2 => RushMode(mandatoryKillRequired: kill),
+        WinCondition.classic => ClassicMode(mandatoryKillRequired: kill),
+      },
+      timerConfig: TimerConfig(enabled: rules.turnTimerEnabled),
+      consecutiveSixesLimit: rules.consecutiveSixesLimit,
+      unlockYardOnOneOrSix: rules.unlockYardOnOneOrSix,
+      gameSpeed: rules.gameSpeed,
+      aiDifficulty: rules.aiDifficulty,
     );
   }
 

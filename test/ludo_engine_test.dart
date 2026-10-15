@@ -501,7 +501,7 @@ void main() {
       expect(redPlayer.tokens.every((t) => t.isInBase), isTrue);
     });
 
-    test('TimerConfig: 12-second turn timeout with 3-strike disconnect penalty', () {
+    test('TimerConfig: 12-second turn timeout; 3 strikes hands the seat to a bot', () {
       final controller = LudoGameController.newGame(
         colors: [PlayerColor.red, PlayerColor.green],
         config: const GameConfig(
@@ -515,31 +515,27 @@ void main() {
       expect(controller.state.config.timerConfig.turnTimeout, equals(const Duration(seconds: 12)));
       expect(controller.state.config.timerConfig.maxStrikes, equals(3));
 
-      // Strike 1
+      expect(controller.state.config.timerConfig.enabled, isFalse,
+          reason: 'the timer is opt-in');
+
+      // Strike 1: recorded against Red, turn unchanged (the caller auto-plays it)
       var state = controller.handleTurnTimeout();
       expect(state.players[0].strikes, equals(1));
       expect(state.players[0].isDisconnected, isFalse);
-      expect(state.activePlayerColor, equals(PlayerColor.green));
-
-      // Green timeout -> Strike 1 for Green
-      state = controller.handleTurnTimeout();
-      expect(state.players[1].strikes, equals(1));
       expect(state.activePlayerColor, equals(PlayerColor.red));
+      expect(state.fsmState, equals(LudoFsmState.waitingForRoll));
 
-      // Strike 2 for Red
+      // Strike 2
       state = controller.handleTurnTimeout();
       expect(state.players[0].strikes, equals(2));
-      expect(state.players[0].isDisconnected, isFalse);
-      expect(state.activePlayerColor, equals(PlayerColor.green));
+      expect(state.players[0].isBotControlled, isFalse);
 
-      // Green turn timeout
-      state = controller.handleTurnTimeout();
-      expect(state.activePlayerColor, equals(PlayerColor.red));
-
-      // Strike 3 for Red -> DISCONNECTED PENALTY!
+      // Strike 3 -> seat taken over by a bot
       state = controller.handleTurnTimeout();
       expect(state.players[0].strikes, equals(3));
       expect(state.players[0].isDisconnected, isTrue);
+      expect(state.players[0].isBotControlled, isTrue);
+      expect(state.players[1].strikes, equals(0), reason: 'other players unaffected');
     });
   });
 

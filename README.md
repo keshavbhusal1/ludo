@@ -31,9 +31,14 @@ An offline 2D Ludo game for 2–4 players (any mix of humans and bots) built wit
   - On launch, an unfinished match is offered in a *Previous match found* banner. Until you resume or dismiss it, the new game isn't saved, so the old match can't be overwritten.
 - **🎨 Board themes:** Dark Modern, Classic Wood, Cyber Neon, Royal Marble.
 - **🎬 Presentation:** full-screen tumbling dice overlay for human rolls, inline rolls for bots, hop-by-hop pawn animation with path previews, and confetti on victory.
-- **📳 Haptics** for dice rolls, pawn hops, and victory (toggle in the app bar).
+- **⏩ Game speed:** 1×, 1.5×, or 2×. Scales bot thinking time, the pause after a bot's roll, the dice overlay, and pawn hops.
+- **⏱️ Turn timer (opt-in):** 12 s per human decision, shown as a countdown in the HUD.
+  - On timeout the player gets a strike and a bot plays that turn for them: it rolls if needed, then picks the best move, so the roll isn't wasted.
+  - After 3 strikes a bot takes over the seat for the rest of the match. Restarting gives the seat back.
+  - The timer pauses while the app is in the background and restarts in full on return.
+- **📳 Haptics** for dice rolls, pawn hops, captures (heavy), tokens reaching home (medium), and victory. Toggle in the app bar; the choice is remembered across launches.
 
-The app starts a 4-player Classic match with all seats human. Use **Settings** to choose players, bots, mode, difficulty, rules, and theme.
+The app starts a 4-player Classic match with all seats human. Use **Settings** to choose players, bots, mode, difficulty, speed, rules (including the turn timer), and theme.
 
 ---
 
@@ -105,13 +110,15 @@ lib/
 
 ### Saved-game format
 
-The autosave is a single JSON value under the `shared_preferences` key `ludo_autosave_v1`. The key name predates the current format. Its contents are a `SavedMatch` (format version 2):
+The autosave is a single JSON value under the `shared_preferences` key `ludo_autosave_v1`. The key name predates the current format. Its contents are a `SavedMatch` (format version 3):
 
 - The game state.
 - The full move history. Moves are stored without their animation paths.
 - The 10 most recent undo points. The BLoC keeps up to 50 in memory.
 
-Version 1 saves (a bare `GameState`) still load, with empty history. Saves from a newer format version are rejected rather than misread.
+Version 1 saves (a bare `GameState`) still load, with empty history. Saves older than version 3 load with the turn timer off: older versions recorded it as enabled even though nothing enforced it. Saves from a newer format version are rejected rather than misread.
+
+The haptics on/off choice is stored separately under `haptics_enabled`.
 
 ---
 
@@ -153,9 +160,11 @@ flutter analyze   # static analysis
 | File | Covers |
 |---|---|
 | `test/ludo_engine_test.dart` | Board topology, rules (captures, safe squares, exact home, sixes, mandatory capture), game modes, serialization, AI scoring |
-| `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume |
-| `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1 compatibility, history and undo persistence |
+| `test/features/ludo/presentation/bloc/ludo_bloc_test.dart` | Turn flow, forced moves, bot timing and game speed, stale-event handling, resume banner, undo and history, persistence across resume, turn timer (timeouts, strikes, bot takeover, background pause) |
+| `test/features/ludo/data/ludo_local_data_source_test.dart` | Save/load/clear, corrupt and future-format saves, v1/v2 compatibility (timer off), history and undo persistence |
 | `test/widget_test.dart` | Screen loads, dice overlay, undo button and history sheet |
+| `test/presentation/widgets/game_setup_dialog_test.dart` | Game speed and turn-timer settings are preselected, changeable, and returned; hidden settings are preserved |
+| `test/core/services/haptics_service_test.dart` | Capture/home haptic patterns, the on/off switch, and remembering it across launches |
 
 Test helpers:
 - `test/helpers/ludo_game_controller.dart` is a small stateful wrapper over the pure engine, used by the engine tests.
@@ -167,9 +176,9 @@ Widget tests must use the in-memory store and run `bootstrap()` in `setUpAll`. I
 
 ## 🚧 Known gaps
 
-- **Game speed has no control in the UI.** The engine and BLoC honor `GameRules.gameSpeed`, scaling bot thinking, dice settling, and pawn hops, but the setup dialog doesn't expose it, so it's always 1×. The consecutive-sixes limit is likewise only configurable in code.
-- **The turn timer isn't used.** `TimerConfig` and `LudoEngine.handleTurnTimeout` (strikes and disconnects) exist and are tested, but nothing in the UI runs a turn timer.
-- **Some haptics never fire.** `HapticsService.capture()` and `tokenHome()` are defined but never called. The haptics on/off setting isn't saved.
+- **The consecutive-sixes limit has no UI control.** It's only configurable in code; the setup dialog keeps whatever value the current match has.
+- **The turn timer has fixed settings.** The 12 s limit and 3-strike maximum come from `TimerConfig` defaults; only on/off is in the UI. A seat taken over by a bot can't be reclaimed mid-match, and the badges don't mark it (the status line shows the bot playing).
+- **Undo can undo strikes.** Undoing to a choice made before a timeout restores the strike count from that point.
 - **Unused and legacy code:** `player_station_widget.dart` is unused, and `pawn.dart`, `pawn_position.dart`, and `TurnPhase` are kept as legacy aliases.
 - **Undo is shared in pass-and-play.** With several humans, undo returns to the most recent choice by any of them.
 

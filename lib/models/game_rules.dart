@@ -55,6 +55,10 @@ class GameRules {
   /// Movement animation and bot thinking speed multiplier (1.0, 1.5, 2.0).
   final double gameSpeed;
 
+  /// If true, human turns are timed; on timeout a bot plays the turn and the
+  /// player takes a strike. At the strike limit a bot takes over the seat.
+  final bool turnTimerEnabled;
+
   const GameRules({
     this.winCondition = WinCondition.classic,
     this.aiDifficulty = AiDifficulty.medium,
@@ -62,6 +66,7 @@ class GameRules {
     this.unlockYardOnOneOrSix = false,
     this.consecutiveSixesLimit = 3,
     this.gameSpeed = 1.0,
+    this.turnTimerEnabled = false,
   });
 
   /// Converts GameRules to GameConfig.
@@ -77,6 +82,7 @@ class GameRules {
     bool? unlockYardOnOneOrSix,
     int? consecutiveSixesLimit,
     double? gameSpeed,
+    bool? turnTimerEnabled,
   }) {
     return GameRules(
       winCondition: winCondition ?? this.winCondition,
@@ -87,6 +93,7 @@ class GameRules {
       consecutiveSixesLimit:
           consecutiveSixesLimit ?? this.consecutiveSixesLimit,
       gameSpeed: gameSpeed ?? this.gameSpeed,
+      turnTimerEnabled: turnTimerEnabled ?? this.turnTimerEnabled,
     );
   }
 
@@ -97,6 +104,7 @@ class GameRules {
         'unlockYardOnOneOrSix': unlockYardOnOneOrSix,
         'consecutiveSixesLimit': consecutiveSixesLimit,
         'gameSpeed': gameSpeed,
+        'turnTimerEnabled': turnTimerEnabled,
       };
 
   factory GameRules.fromJson(Map<String, dynamic> json) => GameRules(
@@ -110,6 +118,7 @@ class GameRules {
         unlockYardOnOneOrSix: json['unlockYardOnOneOrSix'] as bool? ?? false,
         consecutiveSixesLimit: json['consecutiveSixesLimit'] as int? ?? 3,
         gameSpeed: (json['gameSpeed'] as num?)?.toDouble() ?? 1.0,
+        turnTimerEnabled: json['turnTimerEnabled'] as bool? ?? false,
       );
 
   @override
@@ -122,7 +131,8 @@ class GameRules {
           mustCaptureBeforeHome == other.mustCaptureBeforeHome &&
           unlockYardOnOneOrSix == other.unlockYardOnOneOrSix &&
           consecutiveSixesLimit == other.consecutiveSixesLimit &&
-          gameSpeed == other.gameSpeed;
+          gameSpeed == other.gameSpeed &&
+          turnTimerEnabled == other.turnTimerEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -132,6 +142,7 @@ class GameRules {
         unlockYardOnOneOrSix,
         consecutiveSixesLimit,
         gameSpeed,
+        turnTimerEnabled,
       );
 
   @override
